@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   RUMI placeholder tokens — white & gold.
+   When Niamh confirms brand hexes, change them here only.
+   Values are RGB triplets so Tailwind opacity modifiers work.
+   Hex equivalents:
+     paper #FFFFFF · cream #FAF7F1 · ink #191613 · ink-soft #6B655C
+     gold #B4893C · gold-deep #8E6A2A · gold-tint #F5EDDA · line #E9E3D7
+------------------------------------------------------------------- */
+:root {
+  --paper: 255 255 255;
+  --cream: 250 247 241;
+  --ink: 25 22 19;
+  --ink-soft: 107 101 92;
+  --gold: 180 137 60;
+  --gold-deep: 142 106 42;
+  --gold-tint: 245 237 218;
+  --line: 233 227 215;
+}
+
+html,
+body {
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
+}
+
+@layer components {
+  /* Small-caps gold eyebrow used on every page header */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-gold;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-gold px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gold-deep focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-paper px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-gold hover:text-gold-deep focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-line bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft/60 focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20;
+  }
+
+  .card {
+    @apply rounded-lg border border-line bg-paper p-6 shadow-card;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
