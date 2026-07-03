@@ -1,9 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Invite-only: there is no public /signup. Accounts are created by an admin
+// (see src/app/actions/admin.ts) or /api/intake, which sends a recovery link.
 const PUBLIC_PATHS = [
   "/login",
-  "/signup",
   "/reset-password",
   "/update-password",
   "/auth",

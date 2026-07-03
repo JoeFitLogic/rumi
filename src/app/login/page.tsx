@@ -72,18 +72,12 @@ function LoginForm() {
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
-      <div className="flex items-center justify-between pt-1 text-sm">
+      <div className="flex items-center pt-1 text-sm">
         <Link
           href="/reset-password"
           className="text-ink-soft underline-offset-2 hover:text-gold-deep hover:underline"
         >
           Forgot password?
-        </Link>
-        <Link
-          href="/signup"
-          className="text-ink-soft underline-offset-2 hover:text-gold-deep hover:underline"
-        >
-          Create account
         </Link>
       </div>
     </div>
