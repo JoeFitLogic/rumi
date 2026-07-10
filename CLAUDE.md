@@ -253,3 +253,9 @@ If the answer to any of these is no — that becomes the priority. Not ops, not 
 Joe's north star: **£10k MRR. £20k/mo. 90 days.**
 
 Everything Archie does should move toward that number.
+
+<!-- TRIGGER.DEV SKILLS START -->
+## Trigger.dev agent skills
+
+This project has Trigger.dev agent skills installed in `.claude/skills/`. Before writing or changing Trigger.dev code (background tasks, scheduled tasks, realtime, or chat.agent AI agents), load the most relevant skill: `trigger-authoring-tasks`, `trigger-cost-savings`, `trigger-getting-started`.
+<!-- TRIGGER.DEV SKILLS END -->
