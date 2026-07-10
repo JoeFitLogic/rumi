@@ -12,6 +12,14 @@ When Joe opens Claude Code inside this vault, you already know everything below.
 
 ---
 
+## Working style
+
+**Credentials rule (non-negotiable):** Never set, change, or use credentials on any account not created this session. For any authenticated testing, create disposable `@rumi.test` users only, and delete them afterwards (clean up). This rule exists because a real user was locked out.
+
+Before any database work, read `docs/production-db-guidelines.md`.
+
+---
+
 ## Joe's Business
 
 **Company:** FitLogic Systems
