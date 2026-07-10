@@ -149,6 +149,15 @@ account. The pattern:
    `checkin_responses`, `profiles`, then `auth.users`, in that order (children
    before parents, because of the FK to `auth.users`).
 
+**Sanctioned harness for the strategy pipeline:** `scripts/e2e-strategy.mjs`
+already implements this pattern against the fixed disposable identity
+`e2e-strategy@rumi.test`. `--run` seeds fixture sections (no API cost), `--live`
+proves the real `generate-strategy` path, and both share an idempotent
+`--teardown` that also runs automatically if a seed half-fails, so orphaned rows
+can't survive. Prefer running/extending it over hand-rolling a throwaway — the
+Session-3 incident (a `+alias` of a real admin account, no cleanup) is exactly
+what it prevents.
+
 Rules for test data:
 
 - **`@rumi.test` addresses only.** Never seed against a real email.
