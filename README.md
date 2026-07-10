@@ -4,6 +4,8 @@ Personal brand operating system for coaches and their clients. Built by FitLogic
 
 Next.js 15 App Router · TypeScript · Tailwind · Supabase (shared project with Cleo) · Vercel · Anthropic server actions · Resend.
 
+> ⚠️ **The database is live production, shared with Cleo — there is no staging clone.** Read [`docs/production-db-guidelines.md`](docs/production-db-guidelines.md) before running any query, migration, seed, or script.
+
 ## Getting started
 
 ```bash
