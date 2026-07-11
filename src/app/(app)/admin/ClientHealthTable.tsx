@@ -103,7 +103,15 @@ export default function ClientHealthTable({
                       {fmtNum(m.followersGained)}
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <span className="text-xs text-gold-deep">View →</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/clients/${c.id}`);
+                        }}
+                        className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:border-gold hover:text-gold-deep"
+                      >
+                        Manage
+                      </button>
                     </td>
                   </tr>
                 );

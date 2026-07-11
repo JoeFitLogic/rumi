@@ -179,6 +179,19 @@ export function fmtDate(iso: string | null): string {
   });
 }
 
+/**
+ * Countdown to a strategy's auto-release deadline, e.g. "auto-releases in 2d",
+ * "auto-releases today", or "auto-releasing now" once the deadline has passed.
+ */
+export function releaseCountdown(deadlineIso: string | null, now: Date): string {
+  if (!deadlineIso) return "no deadline set";
+  const ms = new Date(deadlineIso).getTime() - now.getTime();
+  if (Number.isNaN(ms)) return "no deadline set";
+  if (ms <= 0) return "auto-releasing now";
+  if (ms < 86_400_000) return `auto-releases in ${Math.max(1, Math.ceil(ms / 3_600_000))}h`;
+  return `auto-releases in ${Math.ceil(ms / 86_400_000)}d`;
+}
+
 /** Short relative label: Today / Yesterday / 5d ago / 3w ago / Never. */
 export function relativeLabel(iso: string | null, now: Date): string {
   const d = daysSince(iso, now);

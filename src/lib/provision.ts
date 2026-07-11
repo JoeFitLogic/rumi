@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { Resend } from "resend";
 import type { User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Role } from "@/lib/types";
 
 // Shared invite-only account provisioning, used by BOTH the admin
 // createClientAccount action and the /api/intake webhook. Service-role only.
@@ -56,12 +57,18 @@ export async function provisionClientAccount(opts: {
   email: string;
   name: string;
   sendInvite?: boolean;
+  /** Role for a freshly-created account. Defaults to "client". Never demotes
+   *  an account that already exists (its existing role is preserved). */
+  role?: Role;
+  /** Set profiles.linked_user_id (used to attach a VA to a client). */
+  linkedUserId?: string | null;
 }): Promise<ProvisionResult> {
   const cleanEmail = opts.email.trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) {
     throw new Error("A valid email is required.");
   }
   const cleanName = opts.name.trim();
+  const role: Role = opts.role ?? "client";
   const admin = createAdminClient();
 
   // ── get-or-create the auth user ──────────────────────────────────────
@@ -82,13 +89,17 @@ export async function provisionClientAccount(opts: {
     userId = created.user.id;
   }
 
-  // ── ensure a complete, active client profile (never demote a role) ───
+  // ── ensure a complete, active profile (never demote a role) ─────────
+  // Role is only set on a fresh insert. If the account already exists we patch
+  // email/name/status/link but deliberately leave role untouched, so
+  // re-provisioning can never demote an admin (or change a client to a VA).
   const { error: insErr } = await admin.from("profiles").insert({
     id: userId,
     email: cleanEmail,
     name: cleanName || null,
-    role: "client",
+    role,
     account_status: "active",
+    linked_user_id: opts.linkedUserId ?? null,
   });
   if (insErr) {
     const patch: Record<string, unknown> = {
@@ -96,6 +107,7 @@ export async function provisionClientAccount(opts: {
       account_status: "active",
     };
     if (cleanName) patch.name = cleanName;
+    if (opts.linkedUserId !== undefined) patch.linked_user_id = opts.linkedUserId;
     const { error: updErr } = await admin
       .from("profiles")
       .update(patch)

@@ -72,7 +72,7 @@ export const ONBOARDING_FIELDS: OnboardingField[] = [
   { column: "anything_else", label: "Anything else you want to share", group: "MINDSET" },
 ];
 
-const GROUP_ORDER: OnboardingGroup[] = [
+export const GROUP_ORDER: OnboardingGroup[] = [
   "IDENTITY",
   "AUDIENCE",
   "GOALS",
@@ -82,6 +82,24 @@ const GROUP_ORDER: OnboardingGroup[] = [
   "CHALLENGES",
   "MINDSET",
 ];
+
+/** Group the onboarding fields in display order, pairing each with its answer
+ *  from `responses`. Used by the client "My answers" view and the admin editor. */
+export function groupedOnboarding(
+  responses: Record<string, unknown> | null | undefined
+): { group: OnboardingGroup; fields: { column: string; label: string; value: string }[] }[] {
+  return GROUP_ORDER.map((group) => ({
+    group,
+    fields: ONBOARDING_FIELDS.filter((f) => f.group === group).map((f) => {
+      const v = responses?.[f.column];
+      return {
+        column: f.column,
+        label: f.label,
+        value: v === null || v === undefined ? "" : String(v),
+      };
+    }),
+  }));
+}
 
 function norm(s: string): string {
   return s.trim().toLowerCase();

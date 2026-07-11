@@ -10,6 +10,7 @@ import {
   PenLine,
   MessageCircle,
   HeartPulse,
+  Settings,
 } from "lucide-react";
 import { useClientContext } from "@/hooks/useClientContext";
 
@@ -96,6 +97,33 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Settings — 8th item, separated from the rest, available to everyone.
+            No ?as= context: settings always acts on the signed-in user. */}
+        <div className="mx-1 my-2 border-t border-line" />
+        {(() => {
+          const active = pathname.startsWith("/settings");
+          return (
+            <Link
+              href="/settings"
+              className={`relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
+                active
+                  ? "bg-gold-tint/60 font-medium text-ink"
+                  : "text-ink-soft hover:bg-cream hover:text-ink"
+              }`}
+            >
+              {active && (
+                <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-gold" />
+              )}
+              <Settings
+                size={17}
+                strokeWidth={1.75}
+                className={active ? "text-gold-deep" : undefined}
+              />
+              <span>Settings</span>
+            </Link>
+          );
+        })()}
       </nav>
 
       <div className="border-t border-line px-6 py-4">
