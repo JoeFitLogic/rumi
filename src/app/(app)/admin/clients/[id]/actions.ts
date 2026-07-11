@@ -5,6 +5,11 @@ import { getActiveClient } from "@/lib/activeClient";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { provisionClientAccount, type ProvisionResult } from "@/lib/provision";
+import {
+  analyzeClientWeek,
+  latestWeekWithData,
+  type AnalysisResult,
+} from "@/lib/checkin-analysis";
 import type { AccountStatus } from "@/lib/types";
 
 /** Gate every admin write server-side. Never trusts a client-supplied role. */
@@ -57,6 +62,32 @@ export async function resendInvite(clientId: string): Promise<ProvisionResult> {
     name: client.name ?? "",
     sendInvite: true,
   });
+}
+
+// ── manual "Run analysis now" (same logic as the Saturday cron, one client) ──
+// Service role by design; analyzeClientWeek is owner-scoped to this clientId.
+// Analyses the client's most recent week that has a check-in, so Niamh sees
+// value without waiting for Saturday. Uses the (draft) analysis prompt.
+export async function runCheckinAnalysisNow(clientId: string): Promise<AnalysisResult> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const week = await latestWeekWithData(admin, clientId);
+  if (!week) {
+    return { status: "skipped", weekStarting: "", reason: "no check-ins yet" };
+  }
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("name")
+    .eq("id", clientId)
+    .maybeSingle();
+  const res = await analyzeClientWeek(
+    admin,
+    clientId,
+    week,
+    (profile?.name as string | null) ?? "the client"
+  );
+  revalidate(clientId);
+  return res;
 }
 
 // ── VA linking (writes linked_user_id on the VA's profile) ───────────────

@@ -15,6 +15,7 @@ import ClientHeaderActions from "./ClientHeaderActions";
 import VaPanel from "./VaPanel";
 import OnboardingEditor from "./OnboardingEditor";
 import VoiceTranscriptCard from "./VoiceTranscriptCard";
+import CheckinAnalysisPanel from "./CheckinAnalysisPanel";
 
 interface StrategyRow {
   id: string;
@@ -141,6 +142,13 @@ export default async function AdminClientDetailPage({
       <div className="mt-6 space-y-6">
         {/* ── Strategy panel ───────────────────────────────────────────── */}
         <StrategyPanel strategy={strategy} clientId={client.id} now={now} />
+
+        {/* ── Check-in analysis (manual "Run analysis now") ────────────── */}
+        <CheckinAnalysisPanel
+          clientId={client.id}
+          clientFirstName={firstName}
+          lastCheckinLabel={relativeLabel(lastCheckinAt, now)}
+        />
 
         {/* ── VA linking ───────────────────────────────────────────────── */}
         <VaPanel clientId={client.id} linkedVas={linkedVas} availableVas={availableVas} />

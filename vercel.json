@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/release-strategies",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/checkin-analysis",
+      "schedule": "0 7 * * 6"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?stage=first",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/checkin-reminder?stage=second",
+      "schedule": "0 7 * * 4"
     }
   ]
 }

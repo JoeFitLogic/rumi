@@ -67,6 +67,48 @@ export async function sendStrategyReleasedEmail(opts: {
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/**
+ * Weekly check-in reminder → a client who hasn't checked in this week.
+ * `first` (Monday) is a warm nudge; `second` (Thursday) is a gentler follow-up.
+ * From-Niamh tone, short, links straight to /check-in. Copy approved 2026-07-11.
+ */
+export async function sendCheckinReminderEmail(opts: {
+  to: string;
+  clientName: string;
+  stage: "first" | "second";
+  link: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = client();
+  if (!resend) return { ok: false, error: "RESEND_API_KEY not set" };
+  const first = opts.clientName.split(" ")[0] || "there";
+
+  const subject =
+    opts.stage === "first"
+      ? "Your weekly check-in is open"
+      : "Still got 5 minutes for your check-in?";
+
+  const body =
+    opts.stage === "first"
+      ? `<p>Hi ${first},</p>
+         <p>New week, so your check-in is open. It takes about five minutes and it's the thing that lets me actually see how your week went, the numbers, the content, and how you're really doing.</p>
+         <p>Do it while it's fresh and I'll have your read waiting.</p>
+         ${button(opts.link, "Do this week's check-in")}
+         <p style="color:#6b655c;font-size:13px">If you've already done it, ignore this.</p>`
+      : `<p>Hi ${first},</p>
+         <p>Just a gentle nudge, your check-in for this week is still open. No stress if it's been a busy one, that's usually exactly the week worth logging.</p>
+         <p>Five minutes and you're done.</p>
+         ${button(opts.link, "Do this week's check-in")}
+         <p style="color:#6b655c;font-size:13px">If you've already done it, ignore this.</p>`;
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject,
+    html: shell(body),
+  });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 /** Generation failed → Joe, with the error. */
 export async function sendGenerationFailedEmail(opts: {
   clientName: string;
