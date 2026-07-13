@@ -16,7 +16,18 @@ import type {
   RedditQuote,
   ContentIdea,
   ResearchNotes,
+  Video,
+  Creator,
+  CompetitorConfig,
 } from "@/lib/research/types";
+import {
+  listVideos,
+  listCreators,
+  listConfigs,
+  setVideoStar,
+  deleteVideo as deleteVideoRow,
+  clearOwnVideos,
+} from "@/lib/research/competitor";
 import {
   TRANSCRIPT_ANALYZER_SYSTEM,
   transcriptAnalyzerUser,
@@ -350,4 +361,53 @@ export async function saveIdea(
   idea: ContentIdea
 ): Promise<{ saved: number }> {
   return saveIdeas(clientId, [idea]);
+}
+
+// ── STEP 5 — Competitor research (per-client, migration 0012) ─────────────────
+// Reads show the client's own rows + legacy/global (NULL) rows; writes only ever
+// touch the client's OWN rows (enforced in src/lib/research/competitor.ts).
+// The scrape/pipeline/CRUD WRITE side is intentionally NOT here yet — it needs
+// the SMAI client_id contract (held until the SMAI repo is in reference/).
+
+export async function listCompetitorVideos(clientId: string): Promise<Video[]> {
+  await authorize(clientId);
+  return listVideos(clientId);
+}
+
+export async function listCompetitorCreators(
+  clientId: string
+): Promise<Creator[]> {
+  await authorize(clientId);
+  return listCreators(clientId);
+}
+
+export async function listCompetitorConfigs(
+  clientId: string
+): Promise<CompetitorConfig[]> {
+  await authorize(clientId);
+  return listConfigs(clientId);
+}
+
+export async function starVideo(
+  clientId: string,
+  videoId: string,
+  starred: boolean
+): Promise<{ changed: number }> {
+  await authorize(clientId);
+  return { changed: await setVideoStar(clientId, videoId, starred) };
+}
+
+export async function removeVideo(
+  clientId: string,
+  videoId: string
+): Promise<{ changed: number }> {
+  await authorize(clientId);
+  return { changed: await deleteVideoRow(clientId, videoId) };
+}
+
+export async function clearVideos(
+  clientId: string
+): Promise<{ cleared: number }> {
+  await authorize(clientId);
+  return { cleared: await clearOwnVideos(clientId) };
 }

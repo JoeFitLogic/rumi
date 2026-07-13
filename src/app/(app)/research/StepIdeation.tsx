@@ -12,6 +12,7 @@ import {
 import { StepIntro, Pill } from "./researchUi";
 import { generateIdeas, saveIdea, saveIdeas } from "./actions";
 import type { ContentIdea, ResearchNotes } from "@/lib/research/types";
+import type { CompetitorVideo } from "@/lib/prompts/ideation-synthesis";
 
 export default function StepIdeation({
   clientId,
@@ -19,12 +20,14 @@ export default function StepIdeation({
   ideas,
   onIdeas,
   hasResearch,
+  selectedVideos,
 }: {
   clientId: string;
   notes: ResearchNotes;
   ideas: ContentIdea[];
   onIdeas: (ideas: ContentIdea[]) => void;
   hasResearch: boolean;
+  selectedVideos: CompetitorVideo[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -36,8 +39,8 @@ export default function StepIdeation({
     setError(null);
     start(async () => {
       try {
-        // selectedVideos param is wired but empty — competitor embed is Session 8.
-        const result = await generateIdeas(clientId, notes, []);
+        // Selected competitor videos (from Step 5) now feed the synthesis.
+        const result = await generateIdeas(clientId, notes, selectedVideos);
         onIdeas(result);
         setSaved(new Set());
       } catch (e) {
@@ -102,6 +105,15 @@ export default function StepIdeation({
             <h3 className="font-display text-lg text-ink">Generate ideas</h3>
             <p className="mt-1 text-sm text-ink-soft">
               8–10 ideas, each traceable to your research.
+              {selectedVideos.length > 0 && (
+                <>
+                  {" "}
+                  <span className="text-gold-deep">
+                    {selectedVideos.length} competitor video
+                    {selectedVideos.length === 1 ? "" : "s"} feeding in.
+                  </span>
+                </>
+              )}
             </p>
           </div>
           <button onClick={run} disabled={pending} className="btn-primary">

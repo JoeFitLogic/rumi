@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Instagram, Lock, Layers } from "lucide-react";
+import { Check, Instagram, Lock } from "lucide-react";
 import { StepIntro, NotesTextarea } from "./researchUi";
 import StepInteractions from "./StepInteractions";
 import StepForums from "./StepForums";
 import StepIdeation from "./StepIdeation";
+import CompetitorResearch from "./CompetitorResearch";
+import { listCompetitorVideos } from "./actions";
 import {
   EMPTY_NOTES,
   type ResearchNotes,
   type ContentIdea,
+  type Video,
 } from "@/lib/research/types";
+import type { CompetitorVideo } from "@/lib/prompts/ideation-synthesis";
 
 type StepKey = "analytics" | "interactions" | "forums" | "ideation" | "hooks";
 
@@ -26,6 +30,7 @@ interface PersistedState {
   notes: ResearchNotes;
   ideas: ContentIdea[];
   activeStep: StepKey;
+  selectedVideoIds: string[];
 }
 
 const storageKey = (clientId: string) => `rumi:research:v1:${clientId}`;
@@ -34,6 +39,9 @@ export default function Research({ clientId }: { clientId: string }) {
   const [notes, setNotes] = useState<ResearchNotes>(EMPTY_NOTES);
   const [ideas, setIdeas] = useState<ContentIdea[]>([]);
   const [active, setActive] = useState<StepKey>("analytics");
+  // Competitor videos (per-client) + which are selected to feed ideation.
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const hydrated = useRef(false);
 
   // ── Load persisted state for this client ────────────────────────────────────
@@ -45,6 +53,9 @@ export default function Research({ clientId }: { clientId: string }) {
         const parsed = JSON.parse(raw) as Partial<PersistedState>;
         setNotes({ ...EMPTY_NOTES, ...(parsed.notes ?? {}) });
         setIdeas(Array.isArray(parsed.ideas) ? parsed.ideas : []);
+        setSelectedVideoIds(
+          new Set(Array.isArray(parsed.selectedVideoIds) ? parsed.selectedVideoIds : [])
+        );
         if (parsed.activeStep && STEPS.some((s) => s.key === parsed.activeStep)) {
           setActive(parsed.activeStep);
         } else {
@@ -53,26 +64,63 @@ export default function Research({ clientId }: { clientId: string }) {
       } else {
         setNotes(EMPTY_NOTES);
         setIdeas([]);
+        setSelectedVideoIds(new Set());
         setActive("analytics");
       }
     } catch {
       setNotes(EMPTY_NOTES);
       setIdeas([]);
+      setSelectedVideoIds(new Set());
     }
     // Allow saves only after the initial load has run for this client.
     hydrated.current = true;
+  }, [clientId]);
+
+  // ── Load per-client competitor videos (empty until migration 0012 + a scrape) ─
+  useEffect(() => {
+    let live = true;
+    listCompetitorVideos(clientId)
+      .then((v) => live && setVideos(v))
+      .catch(() => live && setVideos([]));
+    return () => {
+      live = false;
+    };
   }, [clientId]);
 
   // ── Persist on change (skip the first hydrate) ──────────────────────────────
   useEffect(() => {
     if (!hydrated.current) return;
     try {
-      const payload: PersistedState = { notes, ideas, activeStep: active };
+      const payload: PersistedState = {
+        notes,
+        ideas,
+        activeStep: active,
+        selectedVideoIds: [...selectedVideoIds],
+      };
       localStorage.setItem(storageKey(clientId), JSON.stringify(payload));
     } catch {
       /* localStorage full or unavailable — non-fatal */
     }
-  }, [clientId, notes, ideas, active]);
+  }, [clientId, notes, ideas, active, selectedVideoIds]);
+
+  function toggleVideo(id: string) {
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Selected competitor videos, mapped to the ideation prompt's shape.
+  const selectedVideos: CompetitorVideo[] = videos
+    .filter((v) => selectedVideoIds.has(v.id))
+    .map((v) => ({
+      creator: v.creator ?? "",
+      views: v.views ?? 0,
+      analysis: v.analysis ?? "",
+      newConcepts: v.newConcepts ?? "",
+    }));
 
   function setNote(key: keyof ResearchNotes, value: string) {
     setNotes((prev) => ({ ...prev, [key]: value }));
@@ -134,10 +182,19 @@ export default function Research({ clientId }: { clientId: string }) {
           ideas={ideas}
           onIdeas={setIdeas}
           hasResearch={hasResearch}
+          selectedVideos={selectedVideos}
         />
       )}
 
-      {active === "hooks" && <StepHooks />}
+      {active === "hooks" && (
+        <CompetitorResearch
+          clientId={clientId}
+          videos={videos}
+          selectedIds={selectedVideoIds}
+          onToggleSelect={toggleVideo}
+          onVideosChange={setVideos}
+        />
+      )}
     </div>
   );
 }
@@ -251,23 +308,3 @@ function StepAnalytics({
   );
 }
 
-// ── Step 5 — Hooks & formats (stub until Session 8) ─────────────────────────
-function StepHooks() {
-  return (
-    <div className="space-y-6">
-      <StepIntro
-        eyebrow="Step 5 · Hooks & formats"
-        title="Shape ideas into hooks"
-        description="The final step — pair your saved ideas with proven hook patterns and formats, and scout competitor videos for angles worth stealing."
-      />
-      <div className="card flex flex-col items-center gap-3 border-dashed bg-cream/40 py-12 text-center">
-        <Layers size={24} strokeWidth={1.5} className="text-gold" />
-        <p className="max-w-sm text-sm text-ink-soft">
-          Competitor research and the hook builder land in the next build phase.
-          Your saved ideas are already in Script Studio&apos;s reach when you
-          are ready to write.
-        </p>
-      </div>
-    </div>
-  );
-}

@@ -30,6 +30,10 @@ import {
   updateScriptStatus,
   deleteScript,
 } from "./actions";
+import ContentBank from "./ContentBank";
+import type { ContentIdeaRow } from "@/lib/contentBank";
+
+type View = "ideas" | "scripts";
 
 export default function ScriptStudio({
   clientId,
@@ -37,6 +41,7 @@ export default function ScriptStudio({
   hasVoice,
   clientFirstName,
   initialScripts,
+  initialIdeas,
   prefillTopic,
 }: {
   clientId: string;
@@ -44,10 +49,16 @@ export default function ScriptStudio({
   hasVoice: boolean;
   clientFirstName: string;
   initialScripts: ScriptRow[];
+  initialIdeas: ContentIdeaRow[];
   prefillTopic: string;
 }) {
   const [scripts, setScripts] = useState<ScriptRow[]>(initialScripts);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Topic lives here so "Write script" from an idea can prefill the generator.
+  const [topic, setTopic] = useState(prefillTopic);
+  const [view, setView] = useState<View>(
+    prefillTopic ? "scripts" : initialIdeas.length > 0 ? "ideas" : "scripts"
+  );
 
   const active = scripts.find((s) => s.id === activeId) ?? null;
 
@@ -58,41 +69,110 @@ export default function ScriptStudio({
     });
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-6">
-        <Generator
-          clientId={clientId}
-          isAdmin={isAdmin}
-          hasVoice={hasVoice}
-          clientFirstName={clientFirstName}
-          prefillTopic={prefillTopic}
-          onGenerated={(row) => {
-            upsert(row);
-            setActiveId(row.id);
-          }}
-        />
-        {active && (
-          <ResultPanel
-            key={active.id}
-            clientId={clientId}
-            script={active}
-            onRefined={(row) => upsert(row)}
-          />
-        )}
-      </div>
+  function writeScriptFrom(idea: ContentIdeaRow) {
+    setTopic(idea.hook?.trim() || idea.title);
+    setView("scripts");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-      <Library
-        clientId={clientId}
-        scripts={scripts}
-        activeId={activeId}
-        onSelect={setActiveId}
-        onStatusChanged={(row) => upsert(row)}
-        onDeleted={(id) => {
-          setScripts((prev) => prev.filter((s) => s.id !== id));
-          setActiveId((cur) => (cur === id ? null : cur));
-        }}
+  return (
+    <div className="space-y-6">
+      <ViewToggle
+        view={view}
+        onChange={setView}
+        ideaCount={initialIdeas.length}
+        scriptCount={scripts.length}
       />
+
+      {view === "ideas" ? (
+        <ContentBank
+          clientId={clientId}
+          initialIdeas={initialIdeas}
+          onWriteScript={writeScriptFrom}
+        />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <Generator
+              clientId={clientId}
+              isAdmin={isAdmin}
+              hasVoice={hasVoice}
+              clientFirstName={clientFirstName}
+              topic={topic}
+              setTopic={setTopic}
+              onGenerated={(row) => {
+                upsert(row);
+                setActiveId(row.id);
+              }}
+            />
+            {active && (
+              <ResultPanel
+                key={active.id}
+                clientId={clientId}
+                script={active}
+                onRefined={(row) => upsert(row)}
+              />
+            )}
+          </div>
+
+          <Library
+            clientId={clientId}
+            scripts={scripts}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onStatusChanged={(row) => upsert(row)}
+            onDeleted={(id) => {
+              setScripts((prev) => prev.filter((s) => s.id !== id));
+              setActiveId((cur) => (cur === id ? null : cur));
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Ideas / Scripts segmented switch ─────────────────────────────────────────
+function ViewToggle({
+  view,
+  onChange,
+  ideaCount,
+  scriptCount,
+}: {
+  view: View;
+  onChange: (v: View) => void;
+  ideaCount: number;
+  scriptCount: number;
+}) {
+  const tabs: { key: View; label: string; count: number }[] = [
+    { key: "ideas", label: "Content Bank", count: ideaCount },
+    { key: "scripts", label: "Script Studio", count: scriptCount },
+  ];
+  return (
+    <div className="inline-flex rounded-lg border border-line bg-cream/50 p-1">
+      {tabs.map((t) => {
+        const isActive = t.key === view;
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={`flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm transition-colors ${
+              isActive
+                ? "bg-paper font-medium text-ink shadow-sm"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            {t.label}
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                isActive ? "bg-gold-tint text-gold-deep" : "bg-cream text-ink-soft"
+              }`}
+            >
+              {t.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -103,17 +183,18 @@ function Generator({
   isAdmin,
   hasVoice,
   clientFirstName,
-  prefillTopic,
+  topic,
+  setTopic,
   onGenerated,
 }: {
   clientId: string;
   isAdmin: boolean;
   hasVoice: boolean;
   clientFirstName: string;
-  prefillTopic: string;
+  topic: string;
+  setTopic: (v: string) => void;
   onGenerated: (row: ScriptRow) => void;
 }) {
-  const [topic, setTopic] = useState(prefillTopic);
   const [contentType, setContentType] = useState(CONTENT_TYPES[0].value);
   const [hookType, setHookType] = useState(HOOK_TYPES[0].value);
   const [pillar, setPillar] = useState(PILLARS[2].value); // perspective

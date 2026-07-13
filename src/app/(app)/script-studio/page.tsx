@@ -4,6 +4,7 @@ import { getActiveClient } from "@/lib/activeClient";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasVoiceSample } from "@/lib/voice";
 import type { ScriptRow } from "@/lib/scripts";
+import { SELECT_IDEA, type ContentIdeaRow } from "@/lib/contentBank";
 import ScriptStudio from "./ScriptStudio";
 
 // Two-panel Script Studio: generator (left) + saved library (right).
@@ -28,13 +29,20 @@ export default async function ScriptStudioPage({
   // authorized for activeClientId, and this avoids the shared-DB RLS ambiguity
   // on `scripts` (old Cleo rows have status "saved" and null user_id elsewhere).
   const db = createAdminClient();
-  const [{ data: rows }, hasVoice] = await Promise.all([
+  const [{ data: rows }, { data: ideaRows }, hasVoice] = await Promise.all([
     db
       .from("scripts")
       .select(
         "id, user_id, topic, content_type, hook_type, pillar, audience_stage, length, additional_context, generated_script, status, created_at"
       )
       .eq("user_id", ctx.activeClientId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    // Content Bank ideas — Cleo-shared content_ideas, owner column client_id.
+    db
+      .from("content_ideas")
+      .select(SELECT_IDEA)
+      .eq("client_id", ctx.activeClientId)
       .order("created_at", { ascending: false })
       .limit(500),
     hasVoiceSample(ctx.activeClientId),
@@ -53,6 +61,7 @@ export default async function ScriptStudioPage({
         hasVoice={hasVoice}
         clientFirstName={firstName}
         initialScripts={(rows ?? []) as ScriptRow[]}
+        initialIdeas={(ideaRows ?? []) as ContentIdeaRow[]}
         prefillTopic={prefillTopic}
       />
     </div>
