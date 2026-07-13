@@ -23,5 +23,5 @@
     ".next/types/**/*.ts",
     "trigger.config.ts"
   ],
-  "exclude": ["node_modules", "reference"]
+  "exclude": ["node_modules", "reference", "scripts"]
 }
