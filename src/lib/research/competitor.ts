@@ -317,12 +317,19 @@ export async function ownedCreatorIds(clientId: string): Promise<Set<string>> {
  * Tag the videos a pipeline run just produced to this client. SMAI writes them
  * untagged (client_id NULL) with a date-granular `dateAdded` (YYYY-MM-DD) and the
  * run's `configName`. We claim: NULL rows whose configName matches AND whose
- * dateAdded is on/after the run's start day. Legacy rows (older days) are never
- * caught by the date bound; other clients' rows are excluded by `client_id IS NULL`.
+ * dateAdded is on/after the run's start day.
  *
- * Residual: two runs using the SAME configName on the SAME day could claim each
- * other's videos (dateAdded is only day-granular). Rare in practice (config names
- * are per-client); the claimed count is returned so callers can surface it.
+ * CROSS-TENANT GUARD (Session 10): SMAI's pipeline scrapes EVERY creator in the
+ * shared table (it ignores config.creatorsCategory — see reference/smai note), so
+ * a run also produces videos for creators that belong to OTHER clients. We must
+ * never let this client claim those. So we exclude any candidate whose `creator`
+ * username is owned by a different client (a `creators` row with a non-null,
+ * different client_id). Legacy/shared creators (client_id NULL) stay claimable by
+ * anyone. This makes cross-tenant video OWNERSHIP impossible regardless of what
+ * SMAI scrapes. (Fully stopping the over-broad scrape is a SMAI-side fix.)
+ *
+ * Residual: two runs using the SAME configName on the SAME day could still claim
+ * each other's shared/own videos (dateAdded is day-granular). Rare; count returned.
  */
 export async function claimPipelineVideos(
   clientId: string,
@@ -333,12 +340,38 @@ export async function claimPipelineVideos(
     throw new Error("claimPipelineVideos requires clientId, configName and sinceDay.");
   }
   const db = createAdminClient();
+
+  // Usernames owned by OTHER clients — their videos are off-limits to this claim.
+  const { data: otherCre, error: creErr } = await db
+    .from("creators")
+    .select("username, client_id")
+    .not("client_id", "is", null)
+    .neq("client_id", clientId);
+  if (creErr) throw new Error(creErr.message);
+  const blocked = new Set(
+    (otherCre ?? []).map((r) => String((r as { username: unknown }).username).toLowerCase())
+  );
+
+  // Candidate rows from this run.
+  const { data: cands, error: candErr } = await db
+    .from("videos")
+    .select("id, creator")
+    .is("client_id", null)
+    .eq("configName", configName)
+    .gte("dateAdded", sinceDay);
+  if (candErr) throw new Error(candErr.message);
+
+  const claimIds = (cands ?? [])
+    .filter((v) => !blocked.has(String((v as { creator: unknown }).creator ?? "").toLowerCase()))
+    .map((v) => String((v as { id: unknown }).id));
+  if (claimIds.length === 0) return 0;
+
+  // Re-assert client_id IS NULL on the update so a concurrent claim can't double-tag.
   const { data, error } = await db
     .from("videos")
     .update({ client_id: clientId })
+    .in("id", claimIds)
     .is("client_id", null)
-    .eq("configName", configName)
-    .gte("dateAdded", sinceDay)
     .select("id");
   if (error) throw new Error(error.message);
   return data?.length ?? 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Star,
   Trash2,
@@ -45,7 +45,9 @@ import type {
   Creator,
   CompetitorConfig,
   ConfigInput,
+  PipelineProgress,
 } from "@/lib/research/types";
+import { PIPELINE_TERMINAL } from "@/lib/research/types";
 
 type Tab = "videos" | "pipeline" | "creators" | "configs";
 
@@ -884,8 +886,11 @@ function RunPipelineTab({
   const [error, setError] = useState<string | null>(null);
   const [starting, startRun] = useTransition();
   const [claiming, startClaim] = useTransition();
-  const [run, setRun] = useState<{ runId: string; sinceDay: string; configName: string } | null>(null);
+  const [run, setRun] = useState<{ runId: string; token: string; sinceDay: string; configName: string } | null>(null);
+  const [progress, setProgress] = useState<PipelineProgress | null>(null);
+  const [runStatus, setRunStatus] = useState<string>("");
   const [claimMsg, setClaimMsg] = useState<string | null>(null);
+  const claimedRef = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -901,6 +906,62 @@ function RunPipelineTab({
     };
   }, [clientId]);
 
+  const claimNow = useCallback(
+    (r: { sinceDay: string; configName: string }, auto: boolean) => {
+      if (claimedRef.current) return;
+      claimedRef.current = true;
+      startClaim(async () => {
+        try {
+          const { claimed } = await claimPipelineVideos(clientId, r.sinceDay, r.configName);
+          const videos = await listCompetitorVideos(clientId);
+          onVideosChange(videos);
+          setClaimMsg(
+            claimed > 0
+              ? `Loaded ${claimed} new video${claimed === 1 ? "" : "s"} into your board.`
+              : auto
+                ? "Run finished but produced no new videos (check the log above)."
+                : "No new videos yet — the scrape may still be running. Try again in a moment."
+          );
+        } catch (e) {
+          claimedRef.current = false;
+          setClaimMsg(e instanceof Error ? e.message : "Failed to load results.");
+        }
+      });
+    },
+    [clientId, onVideosChange]
+  );
+
+  // Poll live run status (Trigger.dev via public token) until terminal, then claim.
+  useEffect(() => {
+    if (!run) return;
+    let live = true;
+    const tick = async () => {
+      try {
+        const res = await fetch(
+          `/api/research/pipeline/status?clientId=${encodeURIComponent(clientId)}&runId=${encodeURIComponent(run.runId)}&token=${encodeURIComponent(run.token)}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok || !live) return;
+        const data = (await res.json()) as { status: string; progress: PipelineProgress | null };
+        if (!live) return;
+        setRunStatus(data.status);
+        if (data.progress) setProgress(data.progress);
+        if (PIPELINE_TERMINAL.has(data.status)) {
+          clearInterval(id);
+          if (data.status === "COMPLETED") claimNow(run, true);
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    };
+    const id = setInterval(tick, 4000);
+    tick();
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, [run, clientId, claimNow]);
+
   function run_() {
     if (!configName) {
       setError("Pick a config first.");
@@ -909,33 +970,47 @@ function RunPipelineTab({
     if (!window.confirm("Run a live scrape? This uses Apify + AI credits on the SMAI pipeline.")) return;
     setError(null);
     setClaimMsg(null);
+    setProgress(null);
+    setRunStatus("");
+    claimedRef.current = false;
     startRun(async () => {
       try {
         const started = await startPipeline(clientId, { configName, maxVideos, topK, nDays });
-        setRun({ runId: started.runId, sinceDay: started.sinceDay, configName: started.configName });
+        setRun({
+          runId: started.runId,
+          token: started.publicToken,
+          sinceDay: started.sinceDay,
+          configName: started.configName,
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to start pipeline.");
       }
     });
   }
 
-  function loadResults() {
-    if (!run) return;
-    startClaim(async () => {
-      try {
-        const { claimed } = await claimPipelineVideos(clientId, run.sinceDay, run.configName);
-        const videos = await listCompetitorVideos(clientId);
-        onVideosChange(videos);
-        setClaimMsg(
-          claimed > 0
-            ? `Loaded ${claimed} new video${claimed === 1 ? "" : "s"} into your board.`
-            : "No new videos yet — the scrape may still be running. Try again in a moment."
-        );
-      } catch (e) {
-        setClaimMsg(e instanceof Error ? e.message : "Failed to load results.");
-      }
-    });
-  }
+  const terminal = PIPELINE_TERMINAL.has(runStatus);
+  const failed = terminal && runStatus !== "COMPLETED";
+  // 0–40% scraping, 40–100% analyzing (mirrors SMAI's own progress weighting).
+  const pct = !progress
+    ? 0
+    : progress.phase === "scraping"
+      ? progress.creatorsTotal > 0
+        ? (progress.creatorsScraped / progress.creatorsTotal) * 40
+        : 0
+      : progress.videosTotal > 0
+        ? 40 + (progress.videosAnalyzed / progress.videosTotal) * 60
+        : 40;
+  const phaseLabel = failed
+    ? "Failed"
+    : runStatus === "COMPLETED"
+      ? "Complete"
+      : runStatus === "QUEUED" || (!progress && runStatus)
+        ? "Queued"
+        : progress?.phase === "analyzing"
+          ? "Analyzing videos"
+          : progress?.phase === "done"
+            ? "Finishing"
+            : "Scraping creators";
 
   return (
     <div className="space-y-4">
@@ -988,32 +1063,89 @@ function RunPipelineTab({
       </div>
 
       {run && (
-        <div className="card space-y-3 border-gold/40 bg-gold-tint/20">
+        <div
+          className={`card space-y-3 ${
+            failed ? "border-red-300 bg-red-50/60" : "border-gold/40 bg-gold-tint/20"
+          }`}
+        >
           <div className="flex items-start gap-2.5">
-            <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-gold-deep" />
-            <div>
+            {terminal ? (
+              failed ? (
+                <AlertTriangle size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-red-600" />
+              ) : (
+                <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-emerald-600" />
+              )
+            ) : (
+              <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-gold-deep" />
+            )}
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ink">
-                Scrape running for “{run.configName}”
+                {phaseLabel} — “{run.configName}”
               </p>
               <p className="mt-0.5 text-xs text-ink-soft">
-                Runs in the background on the SMAI pipeline (a few minutes). When it finishes,
-                load the results to claim them into your board.
+                {failed
+                  ? "The pipeline run did not complete. No videos were claimed."
+                  : runStatus === "COMPLETED"
+                    ? "Run finished — results below have been claimed into your board."
+                    : "Runs in the background on the SMAI pipeline (a few minutes). Progress updates live; results claim automatically when it finishes."}
               </p>
               <p className="mt-1 font-mono text-[10px] text-ink-soft/70">run {run.runId}</p>
             </div>
           </div>
+
+          {!failed && (
+            <div className="space-y-1.5">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-parchment-dark/60">
+                <div
+                  className="h-full rounded-full bg-gold-deep transition-[width] duration-500 ease-out"
+                  style={{ width: `${Math.max(2, Math.min(100, pct))}%` }}
+                />
+              </div>
+              {progress && (
+                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-ink-soft">
+                  <span>
+                    Creators {progress.creatorsScraped}/{progress.creatorsTotal || "?"}
+                  </span>
+                  <span>
+                    Videos analyzed {progress.videosAnalyzed}/{progress.videosTotal || "?"}
+                  </span>
+                  {progress.errors.length > 0 && (
+                    <span className="text-red-600">{progress.errors.length} error(s)</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {progress && progress.log.length > 0 && (
+            <p className="truncate font-mono text-[10px] text-ink-soft/70">
+              {progress.log[progress.log.length - 1]}
+            </p>
+          )}
+
           {claimMsg && <p className="text-sm text-ink">{claimMsg}</p>}
-          <button onClick={loadResults} disabled={claiming} className="btn-ghost px-3 py-1.5 text-xs">
-            {claiming ? (
-              <>
-                <Loader2 size={14} className="animate-spin" /> Loading…
-              </>
-            ) : (
-              <>
-                <Check size={14} strokeWidth={2} /> Load results
-              </>
-            )}
-          </button>
+
+          {/* Manual claim as a fallback (auto-claim runs on COMPLETED). */}
+          {(terminal || claimMsg) && (
+            <button
+              onClick={() => {
+                claimedRef.current = false;
+                claimNow(run, false);
+              }}
+              disabled={claiming}
+              className="btn-ghost px-3 py-1.5 text-xs"
+            >
+              {claiming ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Loading…
+                </>
+              ) : (
+                <>
+                  <Check size={14} strokeWidth={2} /> Reload results
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

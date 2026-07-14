@@ -121,3 +121,32 @@ export interface PipelineStart {
   sinceDay: string;
   configName: string;
 }
+
+/** SMAI pipeline progress, surfaced from the Trigger run's `metadata.progress`. */
+export interface PipelineProgress {
+  status: string;
+  phase: "scraping" | "analyzing" | "done" | string;
+  creatorsTotal: number;
+  creatorsScraped: number;
+  creatorsCompleted: number;
+  videosTotal: number;
+  videosAnalyzed: number;
+  errors: string[];
+  log: string[];
+}
+
+/** Live run status polled from Trigger.dev with the run's public token. */
+export interface PipelineRunStatus {
+  /** Trigger run status: QUEUED | EXECUTING | COMPLETED | FAILED | CANCELED | … */
+  status: string;
+  progress: PipelineProgress | null;
+}
+
+export const PIPELINE_TERMINAL = new Set([
+  "COMPLETED",
+  "FAILED",
+  "CANCELED",
+  "CRASHED",
+  "TIMED_OUT",
+  "INTERRUPTED",
+]);
