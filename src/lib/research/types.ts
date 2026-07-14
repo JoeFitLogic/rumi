@@ -93,3 +93,31 @@ export interface Step5Insights {
   topics: { label: string; count: number }[];
   formats: { label: string; count: number }[];
 }
+
+// ── Write-side inputs (Session 9) ────────────────────────────────────────────
+
+/** Fields the user edits when creating/updating a scrape config. */
+export interface ConfigInput {
+  configName: string;
+  creatorsCategory: string;
+  analysisInstruction: string;
+  newConceptsInstruction: string;
+}
+
+/** Params for a pipeline run (mirrors SMAI's PipelineParams). */
+export interface PipelineParams {
+  configName: string;
+  maxVideos: number;
+  topK: number;
+  nDays: number;
+}
+
+/** What starting a pipeline returns: a Trigger.dev run + a scoped public token,
+ *  plus the day-stamp used later to claim the run's videos to this client. */
+export interface PipelineStart {
+  runId: string;
+  publicToken: string;
+  /** YYYY-MM-DD (matches SMAI's dateAdded granularity) captured at trigger time. */
+  sinceDay: string;
+  configName: string;
+}

@@ -1,4 +1,5 @@
 import "server-only";
+import type { PipelineParams } from "./types";
 
 // SMAI (social-media-ai) API client — SERVER-SIDE ONLY.
 //
@@ -8,18 +9,17 @@ import "server-only";
 // handler and injects `x-api-secret` from env here.
 //
 // Config (both read from env so they can be rotated without a code change):
-//   SMAI_API_SECRET  — the shared secret (currently cleo_smai_secret_2024). Required.
-//   SMAI_BASE_URL    — base URL. Falls back to the known prod host if unset, but
-//                      SET IT in .env.local + Vercel so it's explicit + rotatable.
+//   SMAI_API_SECRET  — the shared secret. SMAI checks it as `INTERNAL_API_SECRET`
+//                      on /api/results only; we send it on every call as
+//                      `x-api-secret` (harmless on the unauthenticated write routes).
+//   SMAI_BASE_URL    — base URL. Falls back to the known prod host if unset.
 //
-// STATUS (Session 8): only the READ surface is confirmed and used elsewhere
-// (Rumi reads videos/creators/configs straight from Supabase, per-client). The
-// WRITE / action surface (POST /api/pipeline, /api/creators, config CRUD, the
-// creator-refresh SSE stream) is HELD until the SMAI repo is cloned into
-// reference/ and the real contract — including how it accepts + tags a
-// per-client `client_id` — is known. `smaiFetch` is the seam those actions
-// will use; do not reverse-engineer the POST endpoints against the live shared
-// pipeline in the meantime.
+// STATUS (Session 9): the two flows that genuinely need SMAI's compute are wired
+// here — the pipeline trigger (Trigger.dev) and the creator-refresh SSE (Apify).
+// Config CRUD and creator add/delete are done Rumi-direct in competitor.ts (SMAI
+// writes untagged NULL rows via the anon key with no route auth, so a service-role
+// insert with client_id set is cleaner + atomic than round-tripping then tagging).
+// Pipeline videos land untagged; competitor.ts:claimPipelineVideos tags them.
 
 const DEFAULT_BASE = "https://social-media-ai-theta.vercel.app";
 
@@ -48,5 +48,45 @@ export async function smaiFetch(
       ...(init.headers ?? {}),
     },
     cache: "no-store",
+  });
+}
+
+/**
+ * Trigger a scrape+analyse pipeline run. SMAI hands back a Trigger.dev run id and
+ * a scoped public token; the caller subscribes to run progress with that token
+ * and, on completion, claims the produced videos to the client
+ * (competitor.ts:claimPipelineVideos). The run writes videos untagged (NULL).
+ */
+export async function startPipeline(
+  params: PipelineParams
+): Promise<{ runId: string; publicToken: string }> {
+  const res = await smaiFetch("/api/pipeline", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to start pipeline (SMAI ${res.status}).`);
+  }
+  const data = (await res.json()) as { runId?: string; publicToken?: string };
+  if (!data.runId || !data.publicToken) {
+    throw new Error("SMAI pipeline did not return a run handle.");
+  }
+  return { runId: data.runId, publicToken: data.publicToken };
+}
+
+/**
+ * Refresh 30-day stats for the given creator ids (Apify scrape) — returns the
+ * raw SSE Response so a route handler can pipe it straight to the browser.
+ * SMAI updates each creator in place by id and, because its update object omits
+ * client_id, leaves our per-client tagging intact. The CALLER must pass ONLY ids
+ * the client owns (see competitor.ts:ownedCreatorIds) — an empty list makes SMAI
+ * stream a single `complete` event with no scrape.
+ */
+export async function refreshCreatorsStream(ids: string[]): Promise<Response> {
+  return smaiFetch("/api/creators/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
   });
 }

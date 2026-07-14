@@ -19,6 +19,9 @@ import type {
   Video,
   Creator,
   CompetitorConfig,
+  ConfigInput,
+  PipelineParams,
+  PipelineStart,
 } from "@/lib/research/types";
 import {
   listVideos,
@@ -27,7 +30,14 @@ import {
   setVideoStar,
   deleteVideo as deleteVideoRow,
   clearOwnVideos,
+  createConfig as createConfigRow,
+  updateConfig as updateConfigRow,
+  deleteConfig as deleteConfigRow,
+  createCreator as createCreatorRow,
+  deleteCreator as deleteCreatorRow,
+  claimPipelineVideos as claimPipelineVideosRow,
 } from "@/lib/research/competitor";
+import { startPipeline as smaiStartPipeline } from "@/lib/research/smai";
 import {
   TRANSCRIPT_ANALYZER_SYSTEM,
   transcriptAnalyzerUser,
@@ -410,4 +420,74 @@ export async function clearVideos(
 ): Promise<{ cleared: number }> {
   await authorize(clientId);
   return { cleared: await clearOwnVideos(clientId) };
+}
+
+// ── Config CRUD (per-client, Rumi-direct) ─────────────────────────────────────
+
+export async function createConfig(
+  clientId: string,
+  input: ConfigInput
+): Promise<CompetitorConfig> {
+  await authorize(clientId);
+  return createConfigRow(clientId, input);
+}
+
+export async function updateConfig(
+  clientId: string,
+  id: string,
+  input: ConfigInput
+): Promise<{ changed: number }> {
+  await authorize(clientId);
+  return { changed: await updateConfigRow(clientId, id, input) };
+}
+
+export async function deleteConfig(
+  clientId: string,
+  id: string
+): Promise<{ changed: number }> {
+  await authorize(clientId);
+  return { changed: await deleteConfigRow(clientId, id) };
+}
+
+// ── Creator add / delete (per-client, Rumi-direct) ────────────────────────────
+
+export async function addCreator(
+  clientId: string,
+  username: string,
+  category: string
+): Promise<Creator> {
+  await authorize(clientId);
+  return createCreatorRow(clientId, username, category);
+}
+
+export async function removeCreator(
+  clientId: string,
+  id: string
+): Promise<{ changed: number }> {
+  await authorize(clientId);
+  return { changed: await deleteCreatorRow(clientId, id) };
+}
+
+// ── Pipeline (trigger via SMAI; claim videos back to the client) ──────────────
+
+export async function startPipeline(
+  clientId: string,
+  params: PipelineParams
+): Promise<PipelineStart> {
+  await authorize(clientId);
+  if (!params.configName) throw new Error("Pick a config to run.");
+  // Day-stamp BEFORE triggering so the later claim's date bound can't miss a
+  // video, and matches SMAI's day-granular dateAdded.
+  const sinceDay = new Date().toISOString().slice(0, 10);
+  const { runId, publicToken } = await smaiStartPipeline(params);
+  return { runId, publicToken, sinceDay, configName: params.configName };
+}
+
+export async function claimPipelineVideos(
+  clientId: string,
+  sinceDay: string,
+  configName: string
+): Promise<{ claimed: number }> {
+  await authorize(clientId);
+  return { claimed: await claimPipelineVideosRow(clientId, sinceDay, configName) };
 }
