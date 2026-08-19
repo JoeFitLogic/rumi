@@ -143,7 +143,7 @@ const TYPE_DESCRIPTIONS = {
   talking_head: "Just you, speaking straight to camera. No frills.",
   storytelling: "A personal story told to camera, with a beginning, middle and turn.",
   carousel: "Swipeable slides of text. Silent, made to be read not spoken.",
-  broll_text: "Voiceover over background footage with bold text on screen.",
+  broll_text: "Voiceover over background footage.",
   screen_record: "You record your screen and narrate. Show the thing, explain it.",
   clone: "React to a post, comment or video pinned beside you.",
 };

@@ -54,7 +54,7 @@ export const CONTENT_TYPES: Option[] = [
   {
     value: "broll_text",
     label: "B-roll + text",
-    description: "Voiceover over background footage with bold text on screen.",
+    description: "Voiceover over background footage.",
   },
   {
     value: "screen_record",
