@@ -1,16 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────
 // E2E Script-Studio harness — sanctioned, per docs/production-db-guidelines.md
 //
-//   node scripts/e2e-script-studio.mjs           # --live (default): real Anthropic $$
-//   node scripts/e2e-script-studio.mjs --teardown # remove all E2E rows (idempotent)
+//   node scripts/e2e-script-studio.mjs                  # --live (default): real Anthropic $$
+//   node scripts/e2e-script-studio.mjs --type=broll_text # any content_type (default talking_head)
+//   node scripts/e2e-script-studio.mjs --teardown        # remove all E2E rows (idempotent)
 //
 // WHAT IT PROVES
 //   The Script Studio generate → save → status-change → delete path, against a
 //   disposable @rumi.test client that HAS a voice_transcript (so the voice-sample
 //   branch of the context builder is exercised). It replicates the server action's
-//   substance (same verbatim SCRIPT_GENERATOR prompt read from reference/prompts,
+//   substance (same shipped SCRIPT_GENERATOR prompt read from src/lib/prompts,
 //   same context+voice block, same insert shape) because the action itself is a
 //   "use server" module (next/cache) that can't be imported into plain node.
+//   It also asserts the output carries NO bracketed production markers, for any
+//   content type — the four beats and the words, nothing else.
 //
 // SAFETY (mirrors scripts/e2e-strategy.mjs)
 //   • Fixed disposable identity e2e-script-studio@rumi.test — the stable key.
@@ -124,18 +127,30 @@ const ONBOARDING = {
   anything_else: "[E2E FIXTURE] Disposable test record — safe to delete.",
 };
 
-// ── verbatim SCRIPT_GENERATOR prompt, same slice the build uses ──
+// ── the SHIPPED SCRIPT_GENERATOR prompt, read out of the TS module the app
+// imports. Not reference/prompts/script-generator.md — that file is the record of
+// the original n8n wording and the shipped prompt has since diverged from it. ──
 function loadSystemPrompt() {
-  const raw = readFileSync(new URL("../reference/prompts/script-generator.md", import.meta.url), "utf8");
-  const lines = raw.split("\n");
-  let i = 0;
-  while (i < lines.length && lines[i].startsWith("#")) i++;
-  while (i < lines.length && lines[i].trim() === "") i++;
-  return lines.slice(i).join("\n").replace(/\s+$/, "") + "\n";
+  const raw = readFileSync(new URL("../src/lib/prompts/script-generator.ts", import.meta.url), "utf8");
+  const m = raw.match(/export const SCRIPT_GENERATOR = ("(?:[^"\\]|\\.)*");/s);
+  if (!m) throw new Error("could not read SCRIPT_GENERATOR out of the prompt module");
+  return JSON.parse(m[1]);
 }
 
-async function runLive() {
-  console.log("MODE: --live (REAL script generation — Anthropic tokens will be spent)\n");
+// Content type under test. Default talking_head; override with --type=broll_text
+// etc. Descriptions match src/lib/scripts.ts, which is what the action puts in the brief.
+const TYPE_DESCRIPTIONS = {
+  talking_head: "Just you, speaking straight to camera. No frills.",
+  storytelling: "A personal story told to camera, with a beginning, middle and turn.",
+  carousel: "Swipeable slides of text. Silent, made to be read not spoken.",
+  broll_text: "Voiceover over background footage with bold text on screen.",
+  screen_record: "You record your screen and narrate. Show the thing, explain it.",
+  clone: "React to a post, comment or video pinned beside you.",
+};
+
+async function runLive(contentType) {
+  console.log("MODE: --live (REAL script generation — Anthropic tokens will be spent)");
+  console.log(`content type: ${contentType}\n`);
   await teardown({ quiet: true });
   let userId;
   try {
@@ -163,7 +178,7 @@ async function runLive() {
   const brief = [
     "Now write ONE script with these parameters. Follow the FORMAT-SPECIFIC OUTPUT rules for the content type exactly.",
     "",
-    "- Content type: talking_head (Just you, speaking straight to camera. No frills.)",
+    `- Content type: ${contentType} (${TYPE_DESCRIPTIONS[contentType]})`,
     "- Hook type: Contrarian take",
     "- Content pillar: Perspective",
     "- Audience stage: Discovery",
@@ -185,7 +200,7 @@ async function runLive() {
   // Save exactly as the action does.
   const { data: saved, error: insErr } = await admin.from("scripts").insert({
     user_id: userId, topic: "Why posting more often is not why coaches stay broke — it's the offer.",
-    content_type: "talking_head", hook_type: "contrarian", pillar: "perspective",
+    content_type: contentType, hook_type: "contrarian", pillar: "perspective",
     audience_stage: "discovery", length: "60 seconds", additional_context: null,
     generated_script: script, status: "drafted",
   }).select("id, status, content_type, generated_script").single();
@@ -206,23 +221,37 @@ async function runLive() {
   console.log("delete removed rows  :", del.length, "(expect 1)");
   const voiceEcho = /head in|dead simple|lovely lass|does my head|not one|it's the offer|not the volume/i.test(script);
   console.log("voice/topic in script:", voiceEcho ? "yes ✓" : "check manually");
-  console.log("\n─── SCRIPT PREVIEW (first 900 chars) ───\n");
-  console.log(script.slice(0, 900));
+
+  // No bracketed production markers, any format. This is the whole point of the
+  // prompt change: HOOK/BUILD/DELIVER/CLOSE with the words underneath, nothing else.
+  const brackets = script.match(/\[[^\]\n]*\]/g) ?? [];
+  const noBrackets = brackets.length === 0;
+  console.log("bracketed markers    :", noBrackets ? "none ✓" : `FOUND ${brackets.length} → ${brackets.slice(0, 5).join(" | ")}`);
+
+  console.log("\n─── FULL SCRIPT ───\n");
+  console.log(script);
 
   console.log("\nTearing down…");
   await teardown();
   const gone = await findAuthUser(E2E_EMAIL);
   console.log("auth user after teardown:", gone ? "STILL EXISTS (!!)" : "gone ✓");
 
-  const ok = saved.status === "drafted" && afterStatus.status === "filmed" && del.length === 1 && lib.length === 1 && !gone;
+  const ok = saved.status === "drafted" && afterStatus.status === "filmed" && del.length === 1 && lib.length === 1 && !gone && noBrackets;
   console.log(ok ? "\n✓ PASS — generate/save/status/delete all verified, no rows left." : "\n✗ FAIL — see mismatches above.");
   if (!ok) process.exitCode = 1;
 }
 
-const args = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const args = new Set(argv);
+const typeArg = (argv.find((a) => a.startsWith("--type=")) ?? "").split("=")[1] || "talking_head";
 try {
   if (args.has("--teardown")) { console.log("MODE: --teardown\n"); await teardown(); }
-  else await runLive();
+  else {
+    if (!TYPE_DESCRIPTIONS[typeArg]) {
+      throw new Error(`unknown --type=${typeArg} (expected one of ${Object.keys(TYPE_DESCRIPTIONS).join(", ")})`);
+    }
+    await runLive(typeArg);
+  }
 } catch (err) {
   console.error("\nFATAL:", err.message);
   await teardown({ quiet: true }).catch(() => {});
