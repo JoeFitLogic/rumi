@@ -371,7 +371,7 @@ function VideoCard({
               type="checkbox"
               checked={selected}
               onChange={onToggleSelect}
-              className="h-3.5 w-3.5 accent-[color:var(--gold,#c19a5b)]"
+              className="h-3.5 w-3.5 accent-[color:var(--gold,#ab8115)]"
             />
             Use in ideation
           </label>

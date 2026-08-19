@@ -24,10 +24,12 @@ function inviteEmailHtml(name: string, url: string): string {
   <p style="font-size:15px;line-height:1.5">${hi}</p>
   <p style="font-size:15px;line-height:1.5">Your Rumi account is ready. Set your password to get in:</p>
   <p style="margin:24px 0">
-    <a href="${url}" style="background:#0f0f0f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block">Set your password</a>
+    <a href="${url}" style="background:#ab8115;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block">Set your password</a>
   </p>
-  <p style="font-size:13px;line-height:1.5;color:#666">If the button doesn't work, paste this link into your browser:<br><span style="word-break:break-all;color:#8a6d1a">${url}</span></p>
+  <p style="font-size:13px;line-height:1.5;color:#666">If the button doesn't work, paste this link into your browser:<br><span style="word-break:break-all;color:#7a6200">${url}</span></p>
   <p style="font-size:13px;line-height:1.5;color:#666">This link is single-use and expires. If it has, use “Forgot password?” on the sign-in page to get a fresh one.</p>
+  <hr style="border:none;border-top:1px solid #eae0c5;margin:28px 0 14px">
+  <p style="color:#6b655c;font-size:12px;margin:0"><strong style="color:#7a6200">Rumi</strong> — by Resonance · Connect. Convert.</p>
 </div>`;
 }
 

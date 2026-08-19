@@ -16,12 +16,17 @@ function client(): Resend | null {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Resonance sign-off, on every email. Rumi stays the product wordmark.
+const FOOTER =
+  `<hr style="border:none;border-top:1px solid #eae0c5;margin:28px 0 14px">` +
+  `<p style="color:#6b655c;font-size:12px;margin:0"><strong style="color:#7a6200">Rumi</strong> — by Resonance · Connect. Convert.</p>`;
+
 function shell(body: string): string {
-  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:8px 4px;color:#1a1a1a;line-height:1.55;font-size:15px">${body}</div>`;
+  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:8px 4px;color:#1a1a1a;line-height:1.55;font-size:15px">${body}${FOOTER}</div>`;
 }
 
 function button(href: string, label: string): string {
-  return `<p style="margin:24px 0"><a href="${href}" style="background:#0f0f0f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block">${label}</a></p>`;
+  return `<p style="margin:24px 0"><a href="${href}" style="background:#ab8115;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block">${label}</a></p>`;
 }
 
 /** Draft ready → Niamh + Joe, with a deep link to review it. */
@@ -122,7 +127,7 @@ export async function sendGenerationFailedEmail(opts: {
     subject: `Strategy generation FAILED for ${opts.clientName}`,
     html: shell(
       `<p>Strategy generation failed for <strong>${opts.clientName}</strong>.</p>
-       <pre style="white-space:pre-wrap;background:#f6f2ea;border-radius:8px;padding:12px;font-size:13px">${opts.error}</pre>
+       <pre style="white-space:pre-wrap;background:#f4f1ea;border-radius:8px;padding:12px;font-size:13px">${opts.error}</pre>
        <p>The strategy row is marked <code>failed</code>. Use Regenerate from the client's strategy page to retry.</p>`
     ),
   });

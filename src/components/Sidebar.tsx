@@ -39,9 +39,13 @@ export default function Sidebar() {
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-line bg-paper">
       <div className="px-6 pb-6 pt-7">
         <Link href="/dashboard" className="block">
-          {/* Logo pending — text mark for now */}
+          {/* Logo slot — drop a Resonance logo here; text mark for now.
+              "Rumi" stays the product wordmark; Resonance is the company. */}
           <span className="font-display text-[26px] font-medium tracking-tight text-ink">
             Rumi
+          </span>
+          <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.16em] text-ink-soft/70">
+            by Resonance
           </span>
         </Link>
       </div>

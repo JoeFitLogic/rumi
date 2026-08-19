@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Marcellus, Inter } from "next/font/google";
 import "./globals.css";
 
-const display = Fraunces({
+// Resonance brand heading face. Marcellus is single-weight (400).
+const display = Marcellus({
   subsets: ["latin"],
+  weight: "400",
   variable: "--font-display",
-  axes: ["opsz"],
 });
 
 const body = Inter({

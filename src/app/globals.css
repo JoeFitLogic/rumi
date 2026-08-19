@@ -3,22 +3,23 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------
-   RUMI placeholder tokens — white & gold.
-   When Niamh confirms brand hexes, change them here only.
+   Rumi — Resonance brand palette (beige & gold).
+   Change brand hexes here only; Tailwind + components inherit them.
    Values are RGB triplets so Tailwind opacity modifiers work.
    Hex equivalents:
-     paper #FFFFFF · cream #FAF7F1 · ink #191613 · ink-soft #6B655C
-     gold #B4893C · gold-deep #8E6A2A · gold-tint #F5EDDA · line #E9E3D7
+     paper #FFFFFF · cream #F4F1EA · ink #191613 · ink-soft #6B655C
+     gold #AB8115 · gold-deep #7A6200 · gold-tint #F2EBDA · line #EAE0C5
+   gold-tint and line are light tints of #AB8115.
 ------------------------------------------------------------------- */
 :root {
   --paper: 255 255 255;
-  --cream: 250 247 241;
+  --cream: 244 241 234;
   --ink: 25 22 19;
   --ink-soft: 107 101 92;
-  --gold: 180 137 60;
-  --gold-deep: 142 106 42;
-  --gold-tint: 245 237 218;
-  --line: 233 227 215;
+  --gold: 171 129 21;
+  --gold-deep: 122 98 0;
+  --gold-tint: 242 235 218;
+  --line: 234 224 197;
 }
 
 html,

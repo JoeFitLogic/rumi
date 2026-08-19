@@ -30,9 +30,9 @@ import {
   type CheckinAnalysisRow,
 } from "@/lib/checkin";
 
-const GOLD = "#B4893C";
+const GOLD = "#AB8115";
 const INK_SOFT = "#6B655C";
-const LINE = "#E9E3D7";
+const LINE = "#EAE0C5";
 
 export default function CheckinResults({
   clientFirstName,
