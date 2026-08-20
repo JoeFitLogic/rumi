@@ -5,6 +5,15 @@ import PageHeader from "@/components/PageHeader";
 import { getActiveClient } from "@/lib/activeClient";
 import { createClient } from "@/lib/supabase/server";
 import { allPeriods, fmtDate, type CheckinMetricRow } from "@/lib/dashboard";
+import {
+  clientHealth,
+  countScriptsInWindow,
+  latestCheckin,
+  weekWindow,
+  type HealthCheckinRow,
+  type HealthScriptRow,
+} from "@/lib/health";
+import HealthStrip from "@/components/HealthStrip";
 import MetricCards from "./MetricCards";
 
 interface CheckinAnalysis {
@@ -27,11 +36,13 @@ export default async function DashboardPage({
   if (!ctx) redirect("/login");
 
   const supabase = await createClient();
+  const now = new Date();
+
   const [checkinsRes, analysisRes] = await Promise.all([
     supabase
       .from("checkin_responses")
       .select(
-        "week_starting, created_at, calls_booked, cash_collected, followers_gained, content_volume"
+        "week_starting, created_at, calls_booked, cash_collected, followers_gained, content_volume, calls_attended, calls_offered"
       )
       .eq("user_id", ctx.activeClientId)
       .order("week_starting", { ascending: false }),
@@ -45,9 +56,30 @@ export default async function DashboardPage({
       .maybeSingle(),
   ]);
 
-  const rows = (checkinsRes.data ?? []) as CheckinMetricRow[];
+  const rows = (checkinsRes.data ?? []) as (CheckinMetricRow & HealthCheckinRow)[];
   const analysis = (analysisRes.data ?? null) as CheckinAnalysis | null;
-  const periods = allPeriods(rows, new Date());
+  const periods = allPeriods(rows, now);
+
+  // Scripts are scoped to the SAME week the check-in reports on, so all four
+  // strip metrics describe one window. That week isn't known until the check-in
+  // has been read, hence the second round trip.
+  const latest = latestCheckin(rows);
+  const window = weekWindow(latest, now);
+  const { data: scriptRows } = await supabase
+    .from("scripts")
+    .select("created_at")
+    .eq("user_id", ctx.activeClientId)
+    .gte("created_at", window.start.toISOString())
+    .lt("created_at", window.end.toISOString());
+
+  const health = clientHealth({
+    checkin: latest,
+    scriptsThisWeek: countScriptsInWindow(
+      (scriptRows ?? []) as HealthScriptRow[],
+      window
+    ),
+    now,
+  });
 
   const firstName = (ctx.activeClient.name ?? "there").split(" ")[0];
 
@@ -58,6 +90,8 @@ export default async function DashboardPage({
         title={`Welcome back, ${firstName}`}
         description="Your key numbers and recommendations, pulled from your weekly check-ins."
       />
+
+      <HealthStrip health={health} />
 
       <MetricCards periods={periods} hasData={rows.length > 0} />
 

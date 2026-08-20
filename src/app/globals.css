@@ -20,6 +20,18 @@
   --gold-deep: 122 98 0;
   --gold-tint: 242 235 218;
   --line: 234 224 197;
+
+  /* RAG health signals. Warm-leaning so they sit inside the beige/gold
+     palette rather than shouting over it. Amber IS the brand gold.
+     Hex: green #4F7A3F / #3A5C2E · amber #AB8115 / #7A6200
+          red   #B4472E / #8C3620
+     The -deep pairs are the text-on-white variants (all >= 4.5:1). */
+  --rag-green: 79 122 63;
+  --rag-green-deep: 58 92 46;
+  --rag-amber: 171 129 21;
+  --rag-amber-deep: 122 98 0;
+  --rag-red: 180 71 46;
+  --rag-red-deep: 140 54 32;
 }
 
 html,

@@ -18,6 +18,12 @@ const config: Config = {
         "gold-deep": "rgb(var(--gold-deep) / <alpha-value>)",
         "gold-tint": "rgb(var(--gold-tint) / <alpha-value>)",
         line: "rgb(var(--line) / <alpha-value>)",
+        "rag-green": "rgb(var(--rag-green) / <alpha-value>)",
+        "rag-green-deep": "rgb(var(--rag-green-deep) / <alpha-value>)",
+        "rag-amber": "rgb(var(--rag-amber) / <alpha-value>)",
+        "rag-amber-deep": "rgb(var(--rag-amber-deep) / <alpha-value>)",
+        "rag-red": "rgb(var(--rag-red) / <alpha-value>)",
+        "rag-red-deep": "rgb(var(--rag-red-deep) / <alpha-value>)",
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],

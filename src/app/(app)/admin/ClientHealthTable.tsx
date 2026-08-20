@@ -12,12 +12,17 @@ import {
   type ClientHealth,
   type Period,
 } from "@/lib/dashboard";
+import type { ClientHealthSignals } from "@/lib/health";
+import { RagDots } from "@/components/RagIndicators";
 
 export default function ClientHealthTable({
   clients,
+  health,
   nowMs,
 }: {
   clients: ClientHealth[];
+  /** RAG signals per client id, from healthByClient(). */
+  health: Record<string, ClientHealthSignals>;
   nowMs: number;
 }) {
   const router = useRouter();
@@ -30,8 +35,8 @@ export default function ClientHealthTable({
         <div>
           <p className="text-sm font-medium text-ink">Client overview</p>
           <p className="mt-0.5 text-xs text-ink-soft">
-            Numbers reflect the selected period. Rows flagged after 14 days with
-            no check-in.
+            Numbers reflect the selected period. Health dots cover the client&apos;s
+            latest check-in week: calls, check-in, videos, scripts.
           </p>
         </div>
         <PeriodToggle value={period} onChange={setPeriod} />
@@ -46,12 +51,12 @@ export default function ClientHealthTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line">
-                {["Client", "Last check-in", "Calls booked", "Cash collected", "Followers gained", ""].map(
+                {["Client", "Health", "Last check-in", "Calls booked", "Cash collected", "Followers gained", ""].map(
                   (h, i) => (
                     <th
                       key={h || i}
                       className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-soft ${
-                        i >= 2 && i <= 4 ? "text-right" : "text-left"
+                        i >= 3 && i <= 5 ? "text-right" : "text-left"
                       }`}
                     >
                       {h}
@@ -78,6 +83,13 @@ export default function ClientHealthTable({
                         <span className="block text-xs text-ink-soft">
                           {c.email}
                         </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {health[c.id] ? (
+                        <RagDots metrics={health[c.id].metrics} />
+                      ) : (
+                        <span className="text-xs text-ink-soft">—</span>
                       )}
                     </td>
                     <td className="px-5 py-3.5">

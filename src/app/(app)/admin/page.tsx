@@ -12,6 +12,12 @@ import {
   releaseCountdown,
   type CheckinMetricRowWithUser,
 } from "@/lib/dashboard";
+import {
+  earliestWindowStart,
+  healthByClient,
+  type HealthCheckinRow,
+  type HealthScriptRow,
+} from "@/lib/health";
 import ClientHealthTable from "./ClientHealthTable";
 
 interface ReviewRow {
@@ -27,6 +33,8 @@ export default async function AdminPage() {
   if (!ctx || ctx.viewer.role !== "admin") redirect("/dashboard");
 
   const supabase = await createClient();
+  const now = new Date();
+
   const [clientsRes, rowsRes, reviewRes] = await Promise.all([
     supabase
       .from("profiles")
@@ -36,7 +44,7 @@ export default async function AdminPage() {
     supabase
       .from("checkin_responses")
       .select(
-        "user_id, week_starting, created_at, calls_booked, cash_collected, followers_gained, content_volume"
+        "user_id, week_starting, created_at, calls_booked, cash_collected, followers_gained, content_volume, calls_attended, calls_offered"
       ),
     // Strategies complete but not yet released → the admin review queue.
     supabase
@@ -48,11 +56,22 @@ export default async function AdminPage() {
   ]);
 
   const clientProfiles = clientsRes.data ?? [];
-  const rows = (rowsRes.data ?? []) as CheckinMetricRowWithUser[];
+  const rows = (rowsRes.data ?? []) as (CheckinMetricRowWithUser &
+    HealthCheckinRow)[];
   const reviewRows = (reviewRes.data ?? []) as ReviewRow[];
+  const clientIds = clientProfiles.map((c) => c.id);
 
-  const now = new Date();
+  // Each client is scored over their own check-in week, so one query is
+  // lower-bounded by the earliest of those windows and split per client in
+  // healthByClient(). RLS lets an admin read every client's scripts.
+  const { data: scriptData } = await supabase
+    .from("scripts")
+    .select("user_id, created_at")
+    .gte("created_at", earliestWindowStart(rows, clientIds, now).toISOString());
+  const scriptRows = (scriptData ?? []) as HealthScriptRow[];
+
   const clients = aggregateClients(clientProfiles, rows, now);
+  const health = healthByClient(clientIds, rows, scriptRows, now);
 
   // Resolve a display name per review item (profile name wins over the
   // strategy's stored first name).
@@ -142,7 +161,11 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <ClientHealthTable clients={clients} nowMs={now.getTime()} />
+      <ClientHealthTable
+        clients={clients}
+        health={health}
+        nowMs={now.getTime()}
+      />
     </div>
   );
 }

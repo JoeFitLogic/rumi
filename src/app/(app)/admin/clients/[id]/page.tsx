@@ -10,6 +10,15 @@ import {
   isStale,
   releaseCountdown,
 } from "@/lib/dashboard";
+import {
+  clientHealth,
+  countScriptsInWindow,
+  latestCheckin,
+  weekWindow,
+  type HealthCheckinRow,
+  type HealthScriptRow,
+} from "@/lib/health";
+import { RagBreakdown } from "@/components/RagIndicators";
 import type { AccountStatus, Profile } from "@/lib/types";
 import ClientHeaderActions from "./ClientHeaderActions";
 import VaPanel from "./VaPanel";
@@ -37,12 +46,13 @@ export default async function AdminClientDetailPage({
   if (ctx.viewer.role !== "admin") redirect("/dashboard");
 
   const supabase = await createClient();
+  const now = new Date();
 
   const [
     { data: client },
     { data: onboarding },
     { data: strategyRow },
-    { data: lastCheckin },
+    { data: checkinRows },
     { data: vaRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", id).maybeSingle<Profile>(),
@@ -62,11 +72,11 @@ export default async function AdminClientDetailPage({
       .maybeSingle(),
     supabase
       .from("checkin_responses")
-      .select("created_at")
+      .select(
+        "week_starting, created_at, calls_attended, calls_offered, content_volume, followers_gained"
+      )
       .eq("user_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("week_starting", { ascending: false }),
     supabase
       .from("profiles")
       .select("id, name, email, linked_user_id")
@@ -75,7 +85,6 @@ export default async function AdminClientDetailPage({
 
   if (!client) notFound();
 
-  const now = new Date();
   const firstName = (client.name ?? "this client").split(" ")[0];
   const strategy = strategyRow as StrategyRow | null;
   const onboardingRow = onboarding as (Record<string, unknown> & { id: string }) | null;
@@ -89,8 +98,29 @@ export default async function AdminClientDetailPage({
   const linkedVas = vas.filter((v) => v.linked_user_id === id);
   const availableVas = vas.filter((v) => v.linked_user_id !== id);
 
-  const lastCheckinAt = (lastCheckin as { created_at?: string } | null)?.created_at ?? null;
+  const checkins = (checkinRows ?? []) as HealthCheckinRow[];
+  const latest = latestCheckin(checkins);
+  const lastCheckinAt = latest?.created_at ?? null;
   const stale = isStale(lastCheckinAt, now);
+
+  // Same helper, same thresholds and same week window as the client's own
+  // dashboard strip — the coach sees exactly what the client sees.
+  const window = weekWindow(latest, now);
+  const { data: scriptRows } = await supabase
+    .from("scripts")
+    .select("created_at")
+    .eq("user_id", id)
+    .gte("created_at", window.start.toISOString())
+    .lt("created_at", window.end.toISOString());
+
+  const health = clientHealth({
+    checkin: latest,
+    scriptsThisWeek: countScriptsInWindow(
+      (scriptRows ?? []) as HealthScriptRow[],
+      window
+    ),
+    now,
+  });
 
   return (
     <div className="max-w-3xl">
@@ -126,6 +156,33 @@ export default async function AdminClientDetailPage({
             status={(client.account_status ?? "active") as AccountStatus}
             clientName={firstName}
           />
+        </div>
+
+        {/* ── RAG health breakdown ──────────────────────────────────── */}
+        <div className="mt-5 border-t border-line pt-5">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <p className="eyebrow">This week</p>
+              {health.weekStarting && (
+                <span className="text-xs text-ink-soft">
+                  week of {fmtDate(health.weekStarting)}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-ink-soft">
+              Followers gained{" "}
+              <span className="font-medium tabular-nums text-ink">
+                {health.followersGained ?? 0}
+              </span>
+            </p>
+          </div>
+          {health.hasCheckin ? (
+            <RagBreakdown metrics={health.metrics} />
+          ) : (
+            <p className="text-sm text-ink-soft">
+              No check-in submitted yet, so there is nothing to score.
+            </p>
+          )}
         </div>
 
         <div className="mt-4 border-t border-line pt-4">
