@@ -17,6 +17,9 @@ import {
 // Opus-tier. Overridable via env without a code change.
 const MODEL = process.env.STRATEGY_MODEL ?? "claude-opus-4-8";
 const MAX_TOKENS = 16000;
+// Retried so a rare malformed-JSON slip from the model gets a clean second shot
+// rather than binning the run. Only the final attempt marks 'failed' + emails Joe.
+const MAX_ATTEMPTS = 3;
 
 export interface GenerateStrategyPayload {
   strategyId: string;
@@ -43,11 +46,9 @@ function textFromMessage(msg: {
 
 export const generateStrategy = task({
   id: "generate-strategy",
-  // One deterministic run — on failure we mark 'failed' and email Joe, rather
-  // than silently regenerating (which would burn Opus calls + risk dupes).
-  retry: { maxAttempts: 1 },
+  retry: { maxAttempts: MAX_ATTEMPTS },
   maxDuration: 900,
-  run: async (payload: GenerateStrategyPayload) => {
+  run: async (payload: GenerateStrategyPayload, { ctx }) => {
     const db = admin();
     const { strategyId, userId, onboardingId } = payload;
 
@@ -135,10 +136,25 @@ export const generateStrategy = task({
       return { ok: true, sections: sections.length };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error("Strategy generation failed", { strategyId, message });
+      const attempt = ctx.attempt.number;
+      const isFinalAttempt = attempt >= MAX_ATTEMPTS;
 
-      // Clean up any partial sections, mark failed, alert Joe.
+      // Always clear partial sections so the next attempt starts clean.
       await db.from("strategy_sections").delete().eq("strategy_id", strategyId);
+
+      if (!isFinalAttempt) {
+        // Transient slip (usually malformed JSON). Retry without touching the
+        // client-visible status or emailing Joe about a run that may still succeed.
+        logger.warn("Strategy attempt failed, retrying", {
+          strategyId,
+          attempt,
+          maxAttempts: MAX_ATTEMPTS,
+          message,
+        });
+        throw err;
+      }
+
+      logger.error("Strategy generation failed", { strategyId, attempt, message });
       await db
         .from("strategies")
         .update({ status: "failed" })
