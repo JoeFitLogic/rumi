@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
+  BarChart3,
   BookOpen,
   ClipboardCheck,
   Telescope,
@@ -16,6 +17,7 @@ import { useClientContext } from "@/hooks/useClientContext";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/social", label: "Social", icon: BarChart3 },
   { href: "/strategy", label: "My Strategy", icon: BookOpen },
   { href: "/check-in", label: "Check In", icon: ClipboardCheck },
   { href: "/research", label: "Research", icon: Telescope },
