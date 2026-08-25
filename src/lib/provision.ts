@@ -33,6 +33,124 @@ function inviteEmailHtml(name: string, url: string): string {
 </div>`;
 }
 
+/** Password-reset email. Same shape as the invite, different promise. */
+function resetEmailHtml(name: string, url: string): string {
+  const hi = name ? `Hi ${name},` : "Hi,";
+  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:8px 4px;color:#1a1a1a">
+  <p style="font-size:15px;line-height:1.5">${hi}</p>
+  <p style="font-size:15px;line-height:1.5">Someone asked to reset the password for your Rumi account. If that was you, set a new one here:</p>
+  <p style="margin:24px 0">
+    <a href="${url}" style="background:#ab8115;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block">Choose a new password</a>
+  </p>
+  <p style="font-size:13px;line-height:1.5;color:#666">If the button doesn't work, paste this link into your browser:<br><span style="word-break:break-all;color:#7a6200">${url}</span></p>
+  <p style="font-size:13px;line-height:1.5;color:#666">This link is single-use and expires. If you didn't ask for this, you can ignore this email and your password stays as it is.</p>
+  <hr style="border:none;border-top:1px solid #eae0c5;margin:28px 0 14px">
+  <p style="color:#6b655c;font-size:12px;margin:0"><strong style="color:#7a6200">Rumi</strong> — by Resonance · Connect. Convert.</p>
+</div>`;
+}
+
+/**
+ * Generate a single-use recovery token and email a link to OUR OWN
+ * /auth/callback, via Resend.
+ *
+ * ⚠️ The hand-built URL is the whole point, not an incidental detail. This
+ * Supabase project is shared with Cleo, so its Site URL is Cleo's domain and
+ * Rumi's domain is NOT in the redirect allow-list. Verified empirically: a
+ * `redirectTo` pointing at Rumi is silently REWRITTEN to Cleo's Site URL,
+ * exactly as a made-up domain would be — no error, no warning. So anything
+ * that relies on Supabase's own email (resetPasswordForEmail) or on
+ * `properties.action_link` sends Rumi users to Cleo.
+ *
+ * Taking only `properties.hashed_token` and building the URL from
+ * NEXT_PUBLIC_SITE_URL sidesteps both the allow-list and the shared Site URL.
+ * /auth/callback verifies the token server-side with verifyOtp.
+ *
+ * Never throws on a send failure: it reports it, so a caller that has already
+ * done real work (provisioning an account) is not rolled back by a mail
+ * problem.
+ */
+async function sendRecoveryLink(opts: {
+  email: string;
+  name: string;
+  subject: string;
+  html: (url: string) => string;
+}): Promise<{ sent: boolean; error?: string; id?: string }> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const admin = createAdminClient();
+
+  const { data: linkData, error: genErr } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email: opts.email,
+    options: { redirectTo: `${siteUrl}/auth/callback?next=/update-password` },
+  });
+  const hashedToken = linkData?.properties?.hashed_token;
+  if (genErr || !hashedToken) {
+    return {
+      sent: false,
+      error: genErr?.message ?? "Could not generate the set-password link.",
+    };
+  }
+
+  const url =
+    `${siteUrl}/auth/callback` +
+    `?token_hash=${encodeURIComponent(hashedToken)}` +
+    `&type=recovery&next=/update-password`;
+
+  const from = process.env.RESEND_FROM;
+  if (!process.env.RESEND_API_KEY || !from) {
+    return {
+      sent: false,
+      error:
+        "Email not configured — set RESEND_API_KEY and RESEND_FROM (a verified sender).",
+    };
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { data, error: sendErr } = await resend.emails.send({
+    from,
+    to: opts.email,
+    subject: opts.subject,
+    html: opts.html(url),
+  });
+  // The Resend message id is returned (never the URL, which is a live
+  // credential) so a delivery question can be chased in the Resend dashboard.
+  return sendErr
+    ? { sent: false, error: sendErr.message }
+    : { sent: true, id: data?.id };
+}
+
+/**
+ * Send a password-reset link to an EXISTING account.
+ *
+ * Deliberately never reveals whether the account exists — the caller returns
+ * the same response either way. A missing account makes generateLink fail,
+ * which is reported here and swallowed by the caller.
+ *
+ * Never creates an account: unlike provisionClientAccount, this only ever
+ * mails an existing one.
+ */
+export async function sendPasswordResetEmail(
+  email: string
+): Promise<{ sent: boolean; error?: string; id?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return { sent: false, error: "A valid email is required." };
+  }
+  const admin = createAdminClient();
+  const existing = await findAuthUserByEmail(admin, cleanEmail);
+  if (!existing) return { sent: false, error: "No account for that address." };
+
+  const name =
+    (existing.user_metadata?.name as string | undefined)?.trim() ?? "";
+
+  return sendRecoveryLink({
+    email: cleanEmail,
+    name,
+    subject: "Reset your Rumi password",
+    html: (url) => resetEmailHtml(name, url),
+  });
+}
+
 /** Page through auth users to find one by email (supabase-js has no filter). */
 async function findAuthUserByEmail(
   admin: ReturnType<typeof createAdminClient>,
@@ -122,39 +240,15 @@ export async function provisionClientAccount(opts: {
   }
 
   // ── build the token_hash set-password link + email it via Resend ─────
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  let inviteSent = false;
-  let inviteError: string | undefined;
-
-  const { data: linkData, error: genErr } = await admin.auth.admin.generateLink({
-    type: "recovery",
+  // Shares sendRecoveryLink with the password-reset flow, so the two can't
+  // drift apart on the thing that matters: never trusting Supabase's Site URL
+  // or its redirect handling on this Cleo-shared project.
+  const { sent: inviteSent, error: inviteError } = await sendRecoveryLink({
     email: cleanEmail,
-    options: { redirectTo: `${siteUrl}/auth/callback?next=/update-password` },
+    name: cleanName,
+    subject: "Set up your Rumi account",
+    html: (url) => inviteEmailHtml(cleanName, url),
   });
-  const hashedToken = linkData?.properties?.hashed_token;
-  if (genErr || !hashedToken) {
-    inviteError = genErr?.message ?? "Could not generate the set-password link.";
-  } else {
-    const inviteUrl =
-      `${siteUrl}/auth/callback` +
-      `?token_hash=${encodeURIComponent(hashedToken)}` +
-      `&type=recovery&next=/update-password`;
-    const from = process.env.RESEND_FROM;
-    if (!process.env.RESEND_API_KEY || !from) {
-      inviteError =
-        "Email not configured — set RESEND_API_KEY and RESEND_FROM (a verified sender).";
-    } else {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      const { error: sendErr } = await resend.emails.send({
-        from,
-        to: cleanEmail,
-        subject: "Set up your Rumi account",
-        html: inviteEmailHtml(cleanName, inviteUrl),
-      });
-      if (sendErr) inviteError = sendErr.message;
-      else inviteSent = true;
-    }
-  }
 
   return { userId, alreadyExisted, inviteSent, inviteError };
 }

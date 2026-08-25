@@ -2,27 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import AuthShell from "@/components/AuthShell";
+import { requestPasswordReset } from "./actions";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Sends via our own Resend path, not supabase.auth.resetPasswordForEmail --
+  // see src/app/reset-password/actions.ts for why. The action always resolves
+  // the same way, so there is no error branch to render and no way to tell
+  // from this page whether an account exists.
   async function handleReset() {
     setLoading(true);
-    setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
-    });
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
+    await requestPasswordReset(email);
     setSent(true);
     setLoading(false);
   }
@@ -59,8 +53,6 @@ export default function ResetPasswordPage() {
             onKeyDown={(e) => e.key === "Enter" && handleReset()}
           />
         </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <button
           onClick={handleReset}

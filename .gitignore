@@ -12,3 +12,4 @@ rumi-secrets-record.txt
 
 .trigger
 .tmp-prompt-eval*/
+.tmp-reset-lib/
