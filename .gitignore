@@ -11,3 +11,4 @@ reference/
 rumi-secrets-record.txt
 
 .trigger
+.tmp-prompt-eval*/

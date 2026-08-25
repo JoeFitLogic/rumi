@@ -265,10 +265,17 @@ export async function extractRedditQuotes(
 
 // ── STEP 4 — Ideation synthesis ───────────────────────────────────────────────
 
+// Ordered fallbacks, not a straight swap. The Resonance form has no question
+// for client_misconceptions / client_objections, so those arrive null for any
+// client who came through /onboarding — but GHL-era clients still have real
+// answers in them. Reading the new field first and falling back keeps both
+// generations of client working.
 const CONTEXT_FIELDS = [
   "ideal_client",
   "client_types",
   "client_struggles",
+  "client_2am_thoughts",
+  "not_your_client",
   "client_misconceptions",
   "client_objections",
   "content_performed_well",
@@ -299,8 +306,13 @@ async function buildIdeationContext(
     clientName: clientName || "this coach",
     idealClient: val("ideal_client") || val("client_types"),
     painPoints: val("client_struggles"),
-    recurringLanguage: val("client_misconceptions"),
-    limitingBeliefs: val("client_objections") || val("client_misconceptions"),
+    // client_2am_thoughts is a strictly better source than client_misconceptions
+    // here: the form asks for the phrases verbatim, in quotes.
+    recurringLanguage: val("client_2am_thoughts") || val("client_misconceptions"),
+    limitingBeliefs:
+      val("client_objections") ||
+      val("client_2am_thoughts") ||
+      val("client_misconceptions"),
     contentWorking: val("content_performed_well"),
   };
 }
