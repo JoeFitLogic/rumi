@@ -2,13 +2,28 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Invite-only: there is no public /signup. Accounts are created by an admin
-// (see src/app/actions/admin.ts) or /api/intake, which sends a recovery link.
+// (see src/app/actions/admin.ts), by /api/intake, or by the /onboarding form —
+// all of which send a recovery link.
+//
+// /onboarding is public because the client fills it in BEFORE they have an
+// account; it is gated by the ?k= key checked in its own page, not by a
+// session.
 const PUBLIC_PATHS = [
   "/login",
   "/reset-password",
   "/update-password",
   "/auth",
+  "/onboarding",
 ];
+
+// Public paths a SIGNED-IN user is still allowed to sit on, rather than being
+// bounced to /dashboard:
+//   • /update-password — reached while signed in via the recovery link
+//   • /auth            — the callback must pass through
+//   • /onboarding      — so an admin can open and test the live form, and so a
+//                        client who is already signed in on the same browser
+//                        can still complete an intake link
+const SIGNED_IN_ALLOWED = ["/update-password", "/auth", "/onboarding"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -60,13 +75,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Signed in → keep them out of auth pages (update-password is reached
-  // while signed in via the recovery link, auth/callback must pass through)
+  // Signed in → keep them out of auth pages, except the ones listed above.
   if (
     user &&
     isPublic(pathname) &&
-    !pathname.startsWith("/update-password") &&
-    !pathname.startsWith("/auth")
+    !SIGNED_IN_ALLOWED.some((p) => pathname === p || pathname.startsWith(p + "/"))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";

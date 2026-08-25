@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import { tasks } from "@trigger.dev/sdk";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { provisionClientAccount } from "@/lib/provision";
 import { mapIntakePayload } from "@/lib/onboarding";
-import type { GenerateStrategyPayload } from "@/trigger/generate-strategy";
+import { submitOnboarding } from "@/lib/submitOnboarding";
+
+// LEGACY GHL intake webhook. Kept working as the fallback while the native
+// /onboarding form takes over. The pipeline itself now lives in
+// src/lib/submitOnboarding.ts and is shared with the form, so the two cannot
+// drift; this route is only the GHL-shaped envelope around it (secret auth,
+// loose payload key matching, the JSON response GHL expects).
+//
+// mapIntakePayload still resolves every label this form has ever sent — the
+// Resonance rewording moved those labels into `aliases` rather than replacing
+// them. See src/lib/onboarding.ts.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REVIEW_WINDOW_DAYS = 3;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Pull the contact email out of a GHL payload — try common keys, else scan
@@ -68,75 +74,26 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const name = extractName(payload);
-  const firstName = name.split(" ")[0] || null;
 
   try {
-    // 1. get-or-create the client account + send the set-password invite.
-    const { userId } = await provisionClientAccount({
+    const result = await submitOnboarding({
       email,
-      name,
-      sendInvite: true,
+      name: extractName(payload),
+      responses: mapIntakePayload(payload),
+      source: "ghl",
     });
 
-    const admin = createAdminClient();
-
-    // 2. Idempotency: if a strategy is already pending/generating for this
-    //    user, do not double-fire (Cleo's double-generation bug).
-    const { data: inflight } = await admin
-      .from("strategies")
-      .select("id, status")
-      .eq("user_id", userId)
-      .in("status", ["pending", "generating"])
-      .limit(1)
-      .maybeSingle();
-    if (inflight) {
-      return NextResponse.json(
-        { ok: true, deduped: true, strategyId: inflight.id, userId },
-        { status: 200 }
-      );
-    }
-
-    // 3. Insert the onboarding responses (status 'submitted').
-    const mapped = mapIntakePayload(payload);
-    const { data: onboarding, error: onbErr } = await admin
-      .from("onboarding_responses")
-      .insert({ user_id: userId, status: "submitted", ...mapped })
-      .select("id")
-      .single();
-    if (onbErr || !onboarding) {
-      throw new Error(`onboarding insert failed: ${onbErr?.message}`);
-    }
-
-    // 4. Create the strategy row: pending, review deadline = now + 3 days.
-    const reviewDeadline = new Date(
-      Date.now() + REVIEW_WINDOW_DAYS * 86_400_000
-    ).toISOString();
-    const { data: strategy, error: stratErr } = await admin
-      .from("strategies")
-      .insert({
-        user_id: userId,
-        onboarding_id: onboarding.id,
-        client_name: firstName,
-        status: "pending",
-        review_deadline: reviewDeadline,
-      })
-      .select("id")
-      .single();
-    if (stratErr || !strategy) {
-      throw new Error(`strategy insert failed: ${stratErr?.message}`);
-    }
-
-    // 5. Fire the generation task (enqueues fast) and respond 200.
-    const taskPayload: GenerateStrategyPayload = {
-      strategyId: strategy.id,
-      userId,
-      onboardingId: onboarding.id,
-    };
-    await tasks.trigger("generate-strategy", taskPayload);
-
+    // Response shape unchanged from before the extraction — `deduped` is only
+    // present when it is true, as GHL's logs have always shown it.
     return NextResponse.json(
-      { ok: true, strategyId: strategy.id, userId },
+      result.deduped
+        ? {
+            ok: true,
+            deduped: true,
+            strategyId: result.strategyId,
+            userId: result.userId,
+          }
+        : { ok: true, strategyId: result.strategyId, userId: result.userId },
       { status: 200 }
     );
   } catch (err) {
