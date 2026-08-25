@@ -15,19 +15,40 @@ export interface ProvisionResult {
   alreadyExisted: boolean;
   inviteSent: boolean;
   inviteError?: string;
+  /** Resend message id, when an invite was sent. For chasing delivery. */
+  inviteId?: string;
 }
 
-/** Branded set-password email. Inline styles — email clients ignore <style>. */
-function inviteEmailHtml(name: string, url: string): string {
+/** Branded set-password email. Inline styles — email clients ignore <style>.
+ *
+ *  Carries three things the first version left out, each of which generated a
+ *  "how do I get back in?" reply:
+ *    • the sign-in URL, so they have something to bookmark once the single-use
+ *      link is spent (it previously pointed them at a "sign-in page" they had
+ *      no address for)
+ *    • their email named as the username
+ *    • what happens next, so a client who has just spent hours on the form
+ *      isn't left wondering whether anything is coming */
+function inviteEmailHtml(name: string, url: string, email: string): string {
   const hi = name ? `Hi ${name},` : "Hi,";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const loginUrl = `${siteUrl}/login`;
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:8px 4px;color:#1a1a1a">
   <p style="font-size:15px;line-height:1.5">${hi}</p>
-  <p style="font-size:15px;line-height:1.5">Your Rumi account is ready. Set your password to get in:</p>
+  <p style="font-size:15px;line-height:1.5">Thanks for filling in your Identity Foundation Form. Your Rumi account is ready — set your password and you're in:</p>
   <p style="margin:24px 0">
     <a href="${url}" style="background:#ab8115;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block">Set your password</a>
   </p>
   <p style="font-size:13px;line-height:1.5;color:#666">If the button doesn't work, paste this link into your browser:<br><span style="word-break:break-all;color:#7a6200">${url}</span></p>
-  <p style="font-size:13px;line-height:1.5;color:#666">This link is single-use and expires. If it has, use “Forgot password?” on the sign-in page to get a fresh one.</p>
+  <p style="font-size:15px;line-height:1.5;margin-top:24px"><strong>What happens next</strong><br>Niamh is building your personal brand and growth strategy from your answers. It'll appear in Rumi when it's ready, and we'll email you the moment it does.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;background:#f4f1ea;border-radius:8px;width:100%">
+    <tr><td style="padding:14px 16px;font-size:13px;line-height:1.6;color:#4a453e">
+      <strong style="color:#1a1a1a">Signing in from now on</strong><br>
+      Go to <a href="${loginUrl}" style="color:#7a6200;word-break:break-all">${loginUrl}</a><br>
+      Your username is <strong style="color:#1a1a1a">${email}</strong>
+    </td></tr>
+  </table>
+  <p style="font-size:13px;line-height:1.5;color:#666">The link above is single-use and expires. If it has, use “Forgot password?” on the sign-in page and we'll send a fresh one.</p>
   <hr style="border:none;border-top:1px solid #eae0c5;margin:28px 0 14px">
   <p style="color:#6b655c;font-size:12px;margin:0"><strong style="color:#7a6200">Rumi</strong> — by Resonance · Connect. Convert.</p>
 </div>`;
@@ -243,12 +264,16 @@ export async function provisionClientAccount(opts: {
   // Shares sendRecoveryLink with the password-reset flow, so the two can't
   // drift apart on the thing that matters: never trusting Supabase's Site URL
   // or its redirect handling on this Cleo-shared project.
-  const { sent: inviteSent, error: inviteError } = await sendRecoveryLink({
+  const {
+    sent: inviteSent,
+    error: inviteError,
+    id: inviteId,
+  } = await sendRecoveryLink({
     email: cleanEmail,
     name: cleanName,
     subject: "Set up your Rumi account",
-    html: (url) => inviteEmailHtml(cleanName, url),
+    html: (url) => inviteEmailHtml(cleanName, url, cleanEmail),
   });
 
-  return { userId, alreadyExisted, inviteSent, inviteError };
+  return { userId, alreadyExisted, inviteSent, inviteError, inviteId };
 }
