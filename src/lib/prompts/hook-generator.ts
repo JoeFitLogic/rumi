@@ -27,7 +27,7 @@ Build every hook out of the client's own onboarding answers, never out of a gene
 - "Their 2am thoughts" is the richest source you have. The ideal client's own phrasing, close to verbatim, is usually already a hook. Use it rather than a marketer's summary of it.
 - "Your contrarian beliefs" and "What you hate about your industry" are where the fights come from. Build from an opinion the client actually holds. A borrowed opinion reads as one.
 - "Phrases you use all the time" is an allowlist. Work their real expressions in where they fit. Do not force one into every hook.
-- "Your biggest client wins", "Your best transformation" and their testimonials give you the real numbers and timeframes. Never invent a result.
+- "All client results and moments", "Your best transformation, told as a story" and their testimonials give you the real numbers and timeframes. Never invent a result.
 - "How you naturally talk", "Swearing level" and the examples given with it set the register. Match the level they stated. None means none. Never exceed it, and never scrub a Heavy client into a clean one.
 - "Creators who make you cringe" tells you what to stay out of.
 

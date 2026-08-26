@@ -106,6 +106,10 @@ const CHECKS = [
   { id: "notclient", must: "present", section: 3,
     label: "S3 names who is NOT the client (six-week transformation photo)",
     patterns: [/six-week/i, /transformation photo/i, /not your client/i, /wrong fit/i] },
+
+  { id: "fuckyou-a", must: "present", section: 1,
+    label: "S1 names the fuck-you goal back to them (the gym, paid for outright)",
+    patterns: [/\bgym\b/i, /outright/i, /no debt/i, /your name on it/i] },
 ];
 
 const B_CHECKS = [
@@ -120,6 +124,10 @@ const B_CHECKS = [
   { id: "closing", must: "present", section: 12,
     label: "S12 answers what they wanted understood (not lazy / never been shown)",
     patterns: [/not lazy/i, /never been shown/i, /shown how/i] },
+
+  { id: "fuckyou-b", must: "present", section: 12,
+    label: "S12 ladders the metrics up to the fuck-you goal (the gym)",
+    patterns: [/\bgym\b/i, /outright/i, /no debt/i] },
 
   { id: "banlist-b", must: "absent", section: null,
     label: 'their banlist stays out of Part B, including the format catalogue',

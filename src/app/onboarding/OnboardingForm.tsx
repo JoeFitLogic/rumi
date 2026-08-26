@@ -633,37 +633,58 @@ export default function OnboardingForm({ formKey }: { formKey: string }) {
 }
 
 // ── the form's front matter, from the PDF ────────────────────────────────
+// Verbatim from the revised form, including the spelling. The one line left
+// out is "When you're done, send this back to us directly" -- it is a PDF
+// instruction, and this form has a Submit button.
 function Intro() {
   return (
     <div className="mb-10 border-b border-line pb-10">
-      <p className="eyebrow">Rumi by Resonance</p>
+      <p className="eyebrow">Resonance</p>
       <h1 className="mt-3 font-display text-[30px] leading-tight text-ink">
         Identity Foundation Form
       </h1>
       <p className="mt-4 text-[13px] font-medium uppercase tracking-wider text-gold-deep">
-        Set aside 3&ndash;4 hours · This is where everything starts
+        New Resonance Members · Set aside 3&ndash;4 hours · This is where
+        everything starts
       </p>
       <div className="mt-5 flex flex-col gap-3 text-[14px] leading-relaxed text-ink-soft">
         <p>
-          This will be the foundation of your entire brand. Every script, every
-          video, every DM, every call, it all traces back to what you write here.
-          The more honest you are, the better your content gets. The more
-          surface-level you are, the more generic everything becomes. Simple as
-          that.
+          Ladies and Gentlemennnnn, now THIS, THIS RIGHT HERE, will be the
+          foundation of your entire brand and every building block required to
+          make you undeniable.
         </p>
         <p>
-          Everything you write here feeds directly into your personalised
-          strategy, your Rumi, and your content plan. The detail you put in is
-          the detail you get back out.
+          Every single script, video, DM, call, lead magnet, offer, it all
+          traces back to exactly what you write here.
         </p>
         <p>
-          If typing feels slow, do voice notes and paste the transcript. However
-          you do it just make sure the detail is there.
+          So please do not be shy, the more honest you are, the more REAL we
+          get, the better your content gets as a byproduct. And on the contrary?
+          If you want surface level results, then you should bottle everything
+          up and keep it generic. (how stupid does that sound right??)
+        </p>
+        <p>
+          So please, everything that you write here feeds directly into your
+          personalised strategy, Rumi, your research, and your content plan.
+        </p>
+        <p>
+          Gonna need all the juicy little details from you. Shallow answers mean
+          a bot that sounds like everyone else. Honest answers means a fkin
+          undeniable personal brand with content that sounds like you and
+          attracts the people you ACTUALLY want.
+        </p>
+        <p>
+          Please I HIGHLY ADVISE, to use &ldquo;wispr&rdquo; or any transcription
+          app to make things go faster. However you do it just make sure the
+          detail is there.
         </p>
         <p className="text-ink">
-          <strong className="font-semibold">One rule: be honest, not impressive.</strong>{" "}
-          The polished version of your story is what people scroll past. The real
-          version is what makes them stop.
+          <strong className="font-semibold">
+            Now remember the ONLY RULE: be honest, not impressive.
+          </strong>{" "}
+          The polished version of your story is what people scroll past. The
+          real version is what makes them stop. The people who go deep here see
+          results fastest.
         </p>
       </div>
     </div>

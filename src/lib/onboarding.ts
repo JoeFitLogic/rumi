@@ -11,7 +11,7 @@
 // ── Structure ────────────────────────────────────────────────────────────
 // ONBOARDING_QUESTIONS is the primary model: one entry per question on the
 // PDF, in form order, carrying the EXACT wording and the EXACT helper text.
-// A question owns one or more input boxes; seven questions ask for two
+// A question owns one or more input boxes; six questions ask for two
 // genuinely different things and so own two columns (see `half`).
 //
 // ONBOARDING_FIELDS is the flat, column-keyed projection of that model, plus
@@ -73,19 +73,19 @@ export const PART_INTROS: Partial<Record<OnboardingPart, string>> = {
   "YOUR MISSION AND DRIVE":
     "This is the stuff that keeps you going when the content flops, when nobody's watching, when you question whether any of this is worth it. Without it, your content never carries the weight it needs to actually connect.",
   "YOUR STORY":
-    "Your story is the most powerful content asset you have. Not your expertise, not your offer — your story. People don't connect with credentials. They connect with humanity.",
+    "Your story is the most powerful content asset you have. Not your expertise, not your offer, your story. People don't connect with credentials. They connect with humanity.",
   "YOUR CONVICTION AND POSITIONING":
-    "This is what makes you a one-of-one. Not your offer — your worldview. What you believe, what you hate, what you refuse to do, what you do differently. When someone watches your content, they should either think \"this person gets it\" or \"this isn't for me.\" Neutral is the only reaction that doesn't work.",
+    "This is what makes you a one-of-one. Not your offer, your worldview. What you believe, what you hate, what you refuse to do, what you do differently. When someone watches your content, they should either think \"this person gets it\" or \"this isn't for me.\" Neutral is the only reaction that doesn't work.",
   "YOUR IDEAL CLIENT":
     "Who you attract with your content is not random. Every word, every claim you make is either pulling in the right people or pushing out the wrong ones. The sharper this is, the sharper every piece of content becomes.",
   "CLIENT RESULTS":
-    "Results show your audience that people like them got results with someone like you. The client is the hero — not you.",
+    "Results show your audience that people like them got results with someone like you. The client is the hero, not you.",
   "YOUR VOICE":
     "Your voice is what makes content sound like you and not a template. When your bot generates scripts or we write your content plan, it needs to sound like words that would actually come out of your mouth.",
   "YOUR WORLD":
-    "Your personal brand is like a Netflix show. People don't tune in for one episode — they come back because they want to be inside your world. Characters, locations, recurring moments. That's what makes it feel alive.",
+    "Your personal brand is like a Netflix show. People don't tune in for one episode, they come back because they want to be inside your world. Characters, locations, recurring moments. That's what makes it feel alive.",
   "WHERE YOU'RE STUCK":
-    "The thing keeping you stuck is usually not what it looks like on the surface. \"I need more followers\" and \"I don't know what to post\" are symptoms. We need to find the root — because that's where the real work is, and that's where the real content lives.",
+    "The thing keeping you stuck is usually not what it looks like on the surface. \"I need more followers\" and \"I don't know what to post\" are symptoms. We need to find the root, because that's where the real work is, and that's where the real content lives.",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -95,11 +95,15 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   // ── PART 1 ────────────────────────────────────────────────────────────
   {
     part: "THE BASICS",
-    question: "Describe yourself in 3 words.",
+    question: "Describe yourself the way you'd want to be described.",
     helper:
-      "Not your job title. Three words that describe who you actually are as a person — your energy, your character. If the first three that come to mind are \"driven, ambitious, passionate\", try again.",
+      "Not your job title. Who you actually are as a person, your energy, your character, the way you carry yourself. Describe yourself the way you'd want someone who gets it to describe you. Don't give the safe answer. Don't hold back. Speak your truth.",
+    // The column is named for the question this used to be ("Describe
+    // yourself in 3 words"). Kept as is: onboarding_responses is Cleo's
+    // table and renaming a column there is off-limits. The label is what
+    // reaches Claude and the editors, so that is what was updated.
     fields: [
-      { column: "describe_yourself_3_words", label: "Describe yourself in 3 words", input: "text" },
+      { column: "describe_yourself_3_words", label: "How you'd describe yourself", input: "textarea" },
     ],
   },
   {
@@ -133,7 +137,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR CONTENT",
     question: "How often are you currently posting?",
     helper:
-      "Across all platforms. \"Barely\" and \"inconsistently\" are both valid answers — we need the truth, not the answer that sounds good.",
+      "Across all platforms. \"Barely\" and \"inconsistently\" are both valid answers, we need the truth, not the answer that sounds good.",
     fields: [{ column: "posting_frequency", label: "How often you currently post", input: "textarea" }],
   },
   {
@@ -147,7 +151,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   },
   {
     part: "YOUR CONTENT",
-    question: "What feels natural to make — and what feels unnatural or forced?",
+    question: "What feels natural to make, and what feels unnatural or forced?",
     helper:
       "Both sides. What comes easily, and what feels like you're performing when you do it.",
     fields: [
@@ -168,14 +172,14 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR BUSINESS",
     question: "How much are you making per month right now?",
     helper:
-      "Rough is fine. We need this to understand where you're starting from and what targets are realistic. No judgement either way — it's just a starting point.",
+      "Rough is fine. We need this to understand where you're starting from and what targets are realistic. No judgement either way, it's just a starting point.",
     fields: [{ column: "current_monthly_revenue", label: "Current monthly revenue", input: "text" }],
   },
   {
     part: "YOUR BUSINESS",
     question: "How are you currently getting clients?",
     helper:
-      "Outreach, ads, referrals, content, word of mouth, nothing consistent? Be honest about what's working and what isn't. \"I'm not really sure\" is a legitimate answer — write it if it's true.",
+      "Outreach, ads, referrals, content, word of mouth, nothing consistent? Be honest about what's working and what isn't. \"I'm not really sure\" is a legitimate answer, write it if it's true.",
     fields: [{ column: "how_people_find_you", label: "How people currently find you", input: "textarea" }],
   },
   {
@@ -203,7 +207,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "WHERE YOUR BRAND IS NOW",
     question: "What makes you different from others in your industry?",
     helper:
-      "Not \"I'm more authentic\" or \"I actually care.\" What specifically — from your story, your background, your approach — sets you apart from the hundred other people claiming to do what you do?",
+      "Not \"I'm more authentic\" or \"I actually care.\" What specifically, from your story, your background, your approach, sets you apart from the hundred other people claiming to do what you do?",
     fields: [{ column: "what_makes_you_different", label: "What makes you different", input: "textarea" }],
   },
   {
@@ -222,30 +226,30 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   // ── PART 5 ────────────────────────────────────────────────────────────
   {
     part: "YOUR MISSION AND DRIVE",
-    question: "Why do you do what you do — and what actually led you here?",
+    question: "Why do you do what you do, and what actually led you here?",
     helper:
-      "Not the version you'd put on a website. What actually happened — the moment, the conversation, the realisation — that led you to build this specific thing? Go past \"to make money.\" What problem did you experience yourself that made you think someone needs to fix this? What would you keep doing even if nobody paid you for it?",
+      "Not the version you'd put on a website. What actually happened, the moment, the conversation, the realisation, that led you to build this specific thing? Go past \"to make money.\" What problem did you experience yourself that made you think someone needs to fix this? What would you keep doing even if nobody paid you for it?",
     fields: [{ column: "what_inspired_business", label: "Why you do what you do", input: "textarea" }],
   },
   {
     part: "YOUR MISSION AND DRIVE",
     question: "What drives you when motivation disappears?",
     helper:
-      "Motivation is temporary. What's underneath it — the thing that doesn't go away? Proving someone wrong? Providing for someone you love? A version of your life you refuse to go back to? Name the real driver.",
+      "Motivation is temporary. What's underneath it, the thing that doesn't go away? Proving someone wrong? Providing for someone you love? A version of your life you refuse to go back to? Name the real driver.",
     fields: [{ column: "deeper_driver", label: "What drives you underneath the motivation", input: "textarea" }],
   },
   {
     part: "YOUR MISSION AND DRIVE",
     question: "What discomforts are you running from?",
     helper:
-      "Every desire is downstream from a discomfort. The life you want exists because there's a life you refuse to accept. Financial stress, a job that drained you, a relationship that held you back, feeling invisible, watching other people live the life you want. Be specific — the discomfort is the fuel.",
+      "Every desire is downstream from a discomfort. The life you want exists because there's a life you refuse to accept. Financial stress, a job that drained you, a relationship that held you back, feeling invisible, watching other people live the life you want. Be specific, the discomfort is the fuel.",
     fields: [{ column: "discomforts_running_from", label: "Discomforts you are running from", input: "textarea" }],
   },
   {
     part: "YOUR MISSION AND DRIVE",
     question: "What does your ideal life actually look like?",
     helper:
-      "Not what Instagram says success is. Yours. What does your ideal Tuesday look like — from the moment you wake up to the moment you go to sleep? Where are you? Who are you with? What are you working on? How much are you making, and how? Paint the whole picture.",
+      "Not what Instagram says success is. Yours. What does your ideal Tuesday look like, from the moment you wake up to the moment you go to sleep? Where are you? Who are you with? What are you working on? How much are you making, and how? Paint the whole picture.",
     fields: [{ column: "ideal_life", label: "Your ideal life", input: "textarea" }],
   },
 
@@ -254,7 +258,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR STORY",
     question: "What are the key moments that shaped who you are?",
     helper:
-      "Just list them — wins, losses, turning points, leaps, decisions that scared you, relationships that changed everything, rock bottoms, moments where you stepped into the unknown. We'll build from them. Get as many down as you can.",
+      "Tell every moment in as much detail as you can. Don't be shy. We want to hear it. Wins, losses, turning points, leaps, decisions that scared you, relationships that changed everything, rock bottoms, moments where you stepped into the unknown. Get as many down as you can.",
     fields: [{ column: "key_life_moments", label: "Key moments that shaped you", input: "textarea" }],
   },
   {
@@ -268,14 +272,14 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR STORY",
     question: "What was your lowest point?",
     helper:
-      "The actual moment, not a summary of a difficult period. Where were you physically? What were you feeling — not \"bad,\" but specifically: trapped, ashamed, terrified, alone, invisible, like a fraud? What was going through your head? Write it like a scene — because when you tell this story on camera, that's exactly what it needs to feel like.",
+      "The actual moment, not a summary of a difficult period. Where were you physically? What were you feeling, not \"bad,\" but specifically: trapped, ashamed, terrified, alone, invisible, like a fraud? What was going through your head? Write it like a scene, because when you tell this story on camera, that's exactly what it needs to feel like.",
     fields: [{ column: "lowest_point", label: "Your lowest point", input: "textarea" }],
   },
   {
     part: "YOUR STORY",
     question: "What shifted?",
     helper:
-      "Not \"I decided to change.\" What specifically happened — a conversation, a decision, a person, a moment where something snapped — that made you think and move differently?",
+      "Not \"I decided to change.\" What specifically happened, a conversation, a decision, a person, a moment where something snapped, that made you think and move differently?",
     fields: [{ column: "what_shifted", label: "What shifted", input: "textarea" }],
   },
 
@@ -284,21 +288,21 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR CONVICTION AND POSITIONING",
     question: "What do you hate about your industry?",
     helper:
-      "The beliefs, behaviours, and nonsense you see in your space. The advice being given that you know is wrong. The type of person in your niche that makes you cringe. Don't say \"fake gurus\" — what specifically do they do? Why does it wind you up? What would you say to them if you could?",
+      "The beliefs, behaviours, and nonsense you see in your space. The advice being given that you know is wrong. The type of person in your niche that makes you cringe. Don't say \"fake gurus\", what specifically do they do? Why does it wind you up? What would you say to them if you could?",
     fields: [{ column: "industry_hates", label: "What you hate about your industry", input: "textarea" }],
   },
   {
     part: "YOUR CONVICTION AND POSITIONING",
     question: "What do you believe that most people in your space would push back on?",
     helper:
-      "Your contrarian takes. Things you've learned through experience that contradict what everyone else teaches. These become the content that makes you stand out — because everyone else is saying the same thing and you're saying something different.",
+      "Your contrarian takes. Things you've learned through experience that contradict what everyone else teaches. These become the content that makes you stand out, because everyone else is saying the same thing and you're saying something different.",
     fields: [{ column: "contrarian_beliefs", label: "Your contrarian beliefs", input: "textarea" }],
   },
   {
     part: "YOUR CONVICTION AND POSITIONING",
-    question: "How do you help people differently — and what do you want to be known for?",
+    question: "How do you help people differently, and what do you want to be known for?",
     helper:
-      "Not \"I'm more human.\" What's your actual approach — a framework, a methodology, a philosophy, a way of working that gets results nobody else gets quite the same way? Even if it's not packaged yet, get the raw version down. Then: the sentence people say when they describe you — \"You need to follow them, they're the one who...\" — what?",
+      "Not \"I'm more human.\" What's your actual approach, a framework, a methodology, a philosophy, a way of working that gets results nobody else gets quite the same way? Even if it's not packaged yet, get the raw version down. Then: the sentence people say when they describe you, \"You need to follow them, they're the one who...\" what?",
     fields: [
       { column: "unique_approach", label: "How you help people differently", input: "textarea", half: true },
       { column: "known_for", label: "What you want to be known for", input: "textarea", half: true },
@@ -308,7 +312,7 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR CONVICTION AND POSITIONING",
     question: "What are your core values, and why do you hold each one?",
     helper:
-      "3 to 5 things you actually live by — the non-negotiables. For each one: what happened in your life that made you believe it? A value without a story behind it is just a word.",
+      "3 to 5 things you actually live by, the non-negotiables. For each one: what happened in your life that made you believe it? A value without a story behind it is just a word.",
     fields: [{ column: "core_values", label: "Your core values and why", input: "textarea" }],
   },
 
@@ -317,28 +321,28 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR IDEAL CLIENT",
     question: "Describe your ideal client as a specific human being.",
     helper:
-      "Not \"entrepreneurs.\" A real person. What age? What stage — just started, been at it for a while, making money but stuck? What does their daily life actually look like? Where are they and what are they doing?",
+      "Not \"entrepreneurs.\" A real person. What age? What stage, just started, been at it for a while, making money but stuck? What does their daily life actually look like? Where are they and what are they doing?",
     fields: [{ column: "ideal_client", label: "Your ideal client", input: "textarea" }],
   },
   {
     part: "YOUR IDEAL CLIENT",
     question: "What is the ONE core problem they face?",
     helper:
-      "The big one. The thing that, if you solved it, everything else falls into place for them. Not five problems — the problem.",
+      "The big one. The thing that, if you solved it, everything else falls into place for them. Not five problems, the problem.",
     fields: [{ column: "client_struggles", label: "Their one core problem", input: "textarea" }],
   },
   {
     part: "YOUR IDEAL CLIENT",
-    question: "What are their 2am thoughts — and the war inside their head day to day?",
+    question: "What are their 2am thoughts, and the war inside their head day to day?",
     helper:
-      "The exact phrases running through their head when they can't sleep. The imposter syndrome, comparison, self-doubt, fear of judgement, feeling behind. Write them in quotes — these literally become your hooks.",
+      "The exact phrases running through their head when they can't sleep. The imposter syndrome, comparison, self-doubt, fear of judgement, feeling behind. Write them in quotes, these literally become your hooks.",
     fields: [{ column: "client_2am_thoughts", label: "Their 2am thoughts", input: "textarea" }],
   },
   {
     part: "YOUR IDEAL CLIENT",
     question: "What do they actually want?",
     helper:
-      "Specific dream outcomes. Not \"more clients\" — how many, at what price, by when? What lifestyle? What feeling are they chasing? Be concrete.",
+      "Specific dream outcomes. Not \"more clients\", how many, at what price, by when? What lifestyle? What feeling are they chasing? Be concrete.",
     fields: [{ column: "client_goals_desires", label: "What they actually want", input: "textarea" }],
   },
   {
@@ -350,19 +354,30 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   },
 
   // ── PART 9 ────────────────────────────────────────────────────────────
+  // Two standalone questions where the previous form asked one question with
+  // two halves. Same two columns, so no migration was needed for the split.
   {
     part: "CLIENT RESULTS",
-    question: "What are your biggest client wins — and tell the story of your best transformation.",
+    question: "List all client results or moments we should know.",
     helper:
-      "Specific numbers, transformations, and timeframes first. Not \"I helped people improve\" — how much improvement, in how long, from where to where? Then pick one person and tell the full story: where were they when they came to you, what were they struggling with, what did you do together, what's different about their life now. Story, not case study.",
+      "Numbers, transformations, wins, breakthroughs. Big or small. Don't filter. Get everything down.",
+    // Relabelled from "Your biggest client wins". That label is quoted
+    // verbatim inside the script and hook prompts, which were updated in the
+    // same commit -- the Q&A block sent to Claude is keyed on these labels.
+    fields: [{ column: "client_wins", label: "All client results and moments", input: "textarea" }],
+  },
+  {
+    part: "CLIENT RESULTS",
+    question: "Tell the story of your best transformation.",
+    helper:
+      "Pick one person. Where were they when they came to you, what were they struggling with, what did you do together, what's different about their life now. Story, not case study. From where to where, in how long.",
     fields: [
-      { column: "client_wins", label: "Your biggest client wins", input: "textarea", half: true },
-      { column: "best_transformation_story", label: "Your best transformation, told as a story", input: "textarea", half: true },
+      { column: "best_transformation_story", label: "Your best transformation, told as a story", input: "textarea" },
     ],
   },
   {
     part: "CLIENT RESULTS",
-    question: "Do you have testimonials — video or written?",
+    question: "Do you have testimonials, video or written?",
     helper:
       "If yes, transcribe or paste them below, clearly labelled. If not, this is one of the first things to sort.",
     fields: [{ column: "testimonials", label: "Testimonials", input: "textarea" }],
@@ -373,21 +388,21 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR VOICE",
     question: "Which creators or brands genuinely inspire you, and why?",
     helper:
-      "People whose content makes you think \"I wish I could do that\" or \"that's the energy I want.\" Be specific about WHY — how they talk, the topics they pick, the rawness, the humour, the editing. Don't just drop a name.",
+      "People whose content makes you think \"I wish I could do that\" or \"that's the energy I want.\" Be specific about WHY, how they talk, the topics they pick, the rawness, the humour, the editing. Don't just drop a name.",
     fields: [{ column: "creators_brands_inspire", label: "Creators or brands that inspire you", input: "textarea" }],
   },
   {
     part: "YOUR VOICE",
     question: "Drop 2 to 3 creators who make you cringe or who you think are doing it wrong.",
     helper:
-      "What specifically turns you off? The fake energy? The recycled frameworks? The way they talk? What you reject is part of your identity — don't hold back.",
+      "What specifically turns you off? The fake energy? The recycled frameworks? The way they talk? What you reject is part of your identity, don't hold back.",
     fields: [{ column: "creators_that_cringe", label: "Creators who make you cringe", input: "textarea" }],
   },
   {
     part: "YOUR VOICE",
     question: "How do you naturally talk?",
     helper:
-      "Direct? Calm? High energy? Dry humour? Self-deprecating? Storytelling-heavy? Think about how your mates would describe the way you explain things — with analogies, stories, straight to the point?",
+      "Direct? Calm? High energy? Dry humour? Self-deprecating? Storytelling-heavy? Think about how your mates would describe the way you explain things, with analogies, stories, straight to the point?",
     fields: [{ column: "how_you_talk", label: "How you naturally talk", input: "textarea" }],
   },
   {
@@ -418,9 +433,9 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   },
   {
     part: "YOUR VOICE",
-    question: "What phrases do you use all the time — and what words would never come out of your mouth?",
+    question: "What phrases do you use all the time, and what words would never come out of your mouth?",
     helper:
-      "Catchphrases, filler words, expressions that are just you (minimum 5 — you have them, you just don't notice them). Then flip it: the specific words, tones, or phrases that would sound fake if you said them. The things that, if you saw them in a script, you'd immediately cross out.",
+      "Catchphrases, filler words, expressions that are just you (minimum 5, you have them, you just don't notice them). Then flip it: the specific words, tones, or phrases that would sound fake if you said them. The things that, if you saw them in a script, you'd immediately cross out.",
     fields: [
       { column: "catchphrases", label: "Phrases you use all the time", input: "textarea", half: true },
       { column: "words_never_say", label: "Words that would never come out of your mouth", input: "textarea", half: true },
@@ -432,30 +447,30 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
     part: "YOUR WORLD",
     question: "Who are the characters in your world?",
     helper:
-      "The people who show up in your life and would naturally appear in your stories — partner, best mate, business partner, family, a client, a mentor. Real names or nicknames. These become the recurring cast your audience grows to know.",
+      "The people who show up in your life and would naturally appear in your stories, partner, best mate, business partner, family, a client, a mentor. Real names or nicknames. These become the recurring cast your audience grows to know.",
     fields: [{ column: "characters_in_world", label: "The characters in your world", input: "textarea" }],
   },
   {
     part: "YOUR WORLD",
     question: "What are your interests and hobbies outside of work?",
     helper:
-      "The things that make you three-dimensional. Not another person in your niche talking only about your niche — what do you do, care about, and engage with beyond the business?",
+      "The things that make you three-dimensional. Not another person in your niche talking only about your niche, what do you do, care about, and engage with beyond the business?",
     fields: [{ column: "interests_hobbies", label: "Interests and hobbies outside work", input: "textarea" }],
   },
   {
     part: "YOUR WORLD",
     question: "Describe the old version of you versus the new version.",
     helper:
-      "Who were you before? Who are you becoming? What did the old you believe, do, accept, tolerate? What does the new you refuse to go back to? A lot of your audience is living as the old version of you right now — this is where the deepest connection happens.",
+      "Who were you before? Who are you becoming? What did the old you believe, do, accept, tolerate? What does the new you refuse to go back to? A lot of your audience is living as the old version of you right now, this is where the deepest connection happens.",
     fields: [{ column: "old_self_vs_new_self", label: "Old you versus new you", input: "textarea" }],
   },
 
   // ── PART 12 ───────────────────────────────────────────────────────────
   {
     part: "WHERE YOU'RE STUCK",
-    question: "What's ACTUALLY keeping you stuck — and what scares you about putting yourself out there?",
+    question: "What's ACTUALLY keeping you stuck, and what scares you about putting yourself out there?",
     helper:
-      "Not the polished answer. The real one. The thing you'd admit to a close friend at 2am but wouldn't put on a story. Fear, confusion, overwhelm, not knowing who you are deeply enough to communicate it, imposter syndrome, feeling behind. And: judgement from people you know? Looking stupid? The silence — posting something real and getting nothing back? Your family seeing it? Name every fear. The ones you name lose power.",
+      "Not the polished answer. The real one. The thing you'd admit to a close friend at 2am but wouldn't put on a story. Fear, confusion, overwhelm, not knowing who you are deeply enough to communicate it, imposter syndrome, feeling behind. And: judgement from people you know? Looking stupid? The silence, posting something real and getting nothing back? Your family seeing it? Name every fear. The ones you name lose power.",
     fields: [
       { column: "biggest_challenge", label: "What's actually keeping you stuck", input: "textarea", half: true },
       { column: "fears_about_visibility", label: "What scares you about putting yourself out there", input: "textarea", half: true },
@@ -463,9 +478,9 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   },
   {
     part: "WHERE YOU'RE STUCK",
-    question: "What's the loop running in your head — and what gets in the way of posting consistently?",
+    question: "What's the loop running in your head, and what gets in the way of posting consistently?",
     helper:
-      "The recurring conversation, written exactly as it sounds: \"I should be posting but...\" / \"I know content is the answer but...\" / \"What if I put in all this effort and nothing changes...\" Then the practical blockers — time, confidence, not knowing what to post, perfectionism. Be specific on both.",
+      "The recurring conversation, written exactly as it sounds: \"I should be posting but...\" / \"I know content is the answer but...\" / \"What if I put in all this effort and nothing changes...\" Then the practical blockers, time, confidence, not knowing what to post, perfectionism. Be specific on both.",
     fields: [
       { column: "mental_loop", label: "The loop running in your head", input: "textarea", half: true },
       { column: "content_creation_blockers", label: "What gets in the way of posting consistently", input: "textarea", half: true },
@@ -481,17 +496,24 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   {
     part: "WHERE YOU'RE STUCK",
     question: "What skills do you know you need to improve?",
-    helper: "Messaging, filming, presence on camera, sales, confidence, editing — be honest.",
+    helper: "Messaging, filming, presence on camera, sales, confidence, editing, be honest.",
     fields: [{ column: "skills_to_improve", label: "Skills you want to improve", input: "textarea" }],
   },
 
   // ── PART 13 ───────────────────────────────────────────────────────────
   {
     part: "YOUR GOALS",
-    question: "What are your top three goals for the next 16 weeks?",
+    question: "What are your top three goals for the next 16 weeks, specifically?",
     helper:
-      "Specific. Not \"grow my audience\" — by how much, on which platform, measured how? Not \"get clients\" — how many, at what price, through what method?",
+      "Not \"grow my audience\", by how much, on which platform, measured how? Not \"get clients\", how many, at what price, through what method?",
     fields: [{ column: "top_three_goals", label: "Your top three goals", input: "textarea" }],
+  },
+  {
+    part: "YOUR GOALS",
+    question: "What is your big fuck-you goal?",
+    helper:
+      "Not the safe one. The number, the life, the version of success that feels almost too big to say out loud. The goal you'd feel embarrassed saying to someone who doesn't get it. The thing you actually want. Write it down anyway.",
+    fields: [{ column: "fuck_you_goal", label: "Your big fuck-you goal", input: "textarea" }],
   },
   {
     part: "YOUR GOALS",

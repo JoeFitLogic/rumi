@@ -69,6 +69,7 @@ export const ANSWERS = {
   what_didnt_work: "Bought a course. Posted 30 days straight. Got nothing.",
   skills_to_improve: "Presence on camera. Sales. Not rambling.",
   top_three_goals: "5k followers, 10 coaching clients, GBP 6k/mo by Christmas.",
+  fuck_you_goal: "A gym with my name on it, paid for outright, no debt.",
   breakthrough_win: "One month where clients come to me instead of me chasing.",
   most_nervous_about: "Putting this much of myself out there.",
   understand_about_you: "I'm not lazy. I've just never been shown how.",

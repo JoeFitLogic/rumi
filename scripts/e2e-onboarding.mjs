@@ -216,6 +216,13 @@ async function main() {
     ck(onb?.swearing_level === "Moderate (shit, arse)", "select stored");
     ck(onb?.content_feels_easy && onb?.content_feels_difficult, "both halves of a split question stored");
     ck(onb?.catchphrases && onb?.words_never_say, "voice allowlist and banlist stored separately");
+    // Revised form, Part 13: the new column. Requires sql/0014.
+    ck(onb?.fuck_you_goal === ANSWERS.fuck_you_goal, "fuck_you_goal stored (sql/0014)",
+       `got ${JSON.stringify(onb?.fuck_you_goal)}`);
+    // Revised form, Part 9: one two-half question became two standalone
+    // questions. Same two columns, so both must still land separately.
+    ck(onb?.client_wins && onb?.best_transformation_story,
+       "Part 9's two questions stored in their own columns");
 
     console.log(`\n── 6. the injection attempt was dropped ──`);
     ck(onb?.user_id === user.id, "user_id is the provisioned user, not the injected one");
