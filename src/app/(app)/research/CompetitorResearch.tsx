@@ -23,7 +23,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Markdown from "@/components/Markdown";
-import { StepIntro } from "./researchUi";
+import { SectionHeading } from "./researchUi";
 import { deriveInsights } from "@/lib/research/insights";
 import {
   listCompetitorCreators,
@@ -76,9 +76,8 @@ export default function CompetitorResearch({
 
   return (
     <div className="space-y-6">
-      <StepIntro
-        eyebrow="Step 5 · Competitor research & hooks"
-        title="Steal what's already working"
+      <SectionHeading
+        title="Competitor videos"
         description="Study the reels landing in your niche, then let the hooks, topics and formats sharpen your own ideas. Select videos here to feed them into ideation."
       />
 

@@ -16,15 +16,22 @@ import {
 } from "@/lib/research/types";
 import type { CompetitorVideo } from "@/lib/prompts/ideation-synthesis";
 
-type StepKey = "analytics" | "interactions" | "forums" | "ideation" | "hooks";
+type StepKey = "analytics" | "interactions" | "competitors" | "ideation";
 
 const STEPS: { key: StepKey; label: string }[] = [
   { key: "analytics", label: "Your analytics" },
   { key: "interactions", label: "Client interactions" },
-  { key: "forums", label: "External forums" },
+  { key: "competitors", label: "Competitor research" },
   { key: "ideation", label: "Ideation" },
-  { key: "hooks", label: "Hooks & formats" },
 ];
+
+// Older persisted state used five steps; "forums" and "hooks" both folded into
+// "competitor research", so map them forward rather than dumping the user back
+// on step 1.
+const LEGACY_STEPS: Record<string, StepKey> = {
+  forums: "competitors",
+  hooks: "competitors",
+};
 
 interface PersistedState {
   notes: ResearchNotes;
@@ -56,11 +63,13 @@ export default function Research({ clientId }: { clientId: string }) {
         setSelectedVideoIds(
           new Set(Array.isArray(parsed.selectedVideoIds) ? parsed.selectedVideoIds : [])
         );
-        if (parsed.activeStep && STEPS.some((s) => s.key === parsed.activeStep)) {
-          setActive(parsed.activeStep);
-        } else {
-          setActive("analytics");
-        }
+        const saved = parsed.activeStep as string | undefined;
+        const step = saved
+          ? STEPS.some((s) => s.key === saved)
+            ? (saved as StepKey)
+            : LEGACY_STEPS[saved]
+          : undefined;
+        setActive(step ?? "analytics");
       } else {
         setNotes(EMPTY_NOTES);
         setIdeas([]);
@@ -136,13 +145,18 @@ export default function Research({ clientId }: { clientId: string }) {
   const done: Record<StepKey, boolean> = {
     analytics: notes.analytics.trim().length > 0,
     interactions: notes.clients.trim().length > 0,
-    forums: notes.forums.trim().length > 0 || notes.trends.trim().length > 0,
+    competitors:
+      notes.forums.trim().length > 0 ||
+      notes.trends.trim().length > 0 ||
+      selectedVideoIds.size > 0,
     ideation: ideas.length > 0,
-    hooks: false,
   };
 
   const hasResearch =
-    done.analytics || done.interactions || done.forums || notes.trends.trim().length > 0;
+    done.analytics ||
+    done.interactions ||
+    notes.forums.trim().length > 0 ||
+    notes.trends.trim().length > 0;
 
   return (
     <div className="space-y-8">
@@ -164,15 +178,35 @@ export default function Research({ clientId }: { clientId: string }) {
         />
       )}
 
-      {active === "forums" && (
-        <StepForums
-          clientId={clientId}
-          forumsNotes={notes.forums}
-          onForumsChange={(v) => setNote("forums", v)}
-          onAppendForums={(t) => appendNote("forums", t)}
-          trendsNotes={notes.trends}
-          onTrendsChange={(v) => setNote("trends", v)}
-        />
+      {active === "competitors" && (
+        <div className="space-y-8">
+          <StepIntro
+            eyebrow="Step 3 · Competitor research"
+            title="Steal what's already working"
+            description="Study the reels landing in your niche, then listen in on what your audience says when you're not in the room. Select videos and quotes here to feed them into ideation."
+          />
+
+          {/* Competitor machinery first — videos, pipeline, creators, configs. */}
+          <CompetitorResearch
+            clientId={clientId}
+            videos={videos}
+            selectedIds={selectedVideoIds}
+            onToggleSelect={toggleVideo}
+            onVideosChange={setVideos}
+          />
+
+          {/* Then the forums / Reddit listening, in the same step. */}
+          <div className="border-t border-line pt-8">
+            <StepForums
+              clientId={clientId}
+              forumsNotes={notes.forums}
+              onForumsChange={(v) => setNote("forums", v)}
+              onAppendForums={(t) => appendNote("forums", t)}
+              trendsNotes={notes.trends}
+              onTrendsChange={(v) => setNote("trends", v)}
+            />
+          </div>
+        </div>
       )}
 
       {active === "ideation" && (
@@ -183,16 +217,6 @@ export default function Research({ clientId }: { clientId: string }) {
           onIdeas={setIdeas}
           hasResearch={hasResearch}
           selectedVideos={selectedVideos}
-        />
-      )}
-
-      {active === "hooks" && (
-        <CompetitorResearch
-          clientId={clientId}
-          videos={videos}
-          selectedIds={selectedVideoIds}
-          onToggleSelect={toggleVideo}
-          onVideosChange={setVideos}
         />
       )}
     </div>
@@ -262,7 +286,7 @@ function StepAnalytics({
       <StepIntro
         eyebrow="Step 1 · Your analytics"
         title="What's already working"
-        description="Start with the data you already have. What's your audience actually responding to? Pull the specifics — the more concrete, the sharper the ideas at the end."
+        description="Start with the data you already have. What's your audience actually saying? What are they engaging with, what do they want to hear more of? Pull the specifics — the more concrete, the sharper the ideas at the end."
       />
 
       <div className="card">

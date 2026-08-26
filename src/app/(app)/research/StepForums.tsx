@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Search, Loader2, Plus, RotateCw, AlertTriangle } from "lucide-react";
-import { StepIntro, NotesTextarea, SelectableCard, Pill } from "./researchUi";
+import { SectionHeading, NotesTextarea, SelectableCard, Pill } from "./researchUi";
 import { startReddit, checkReddit, extractRedditQuotes } from "./actions";
 import type { RedditQuote } from "@/lib/research/types";
 
@@ -176,10 +176,9 @@ export default function StepForums({
 
   return (
     <div className="space-y-6">
-      <StepIntro
-        eyebrow="Step 3 · External forums"
-        title="What your audience says when you're not listening"
-        description="Point the Reddit scraper at your audience's keywords. Claude picks the 5 most relevant communities, scrapes their top posts, and pulls out the highest-signal language."
+      <SectionHeading
+        title="Forums & communities"
+        description="What your audience says when you're not listening. Point the Reddit scraper at your audience's keywords. Claude picks the 5 most relevant communities, scrapes their top posts, and pulls out the highest-signal language."
       />
 
       <div className="card space-y-4">
@@ -345,7 +344,7 @@ export default function StepForums({
 
       {/* TRENDS — a fourth research source the ideation prompt expects. Lightly
           placed here alongside external listening; wired so notes.trends flows
-          into Step 4. */}
+          into Step 4 (Ideation). */}
       <div className="card space-y-4">
         <NotesTextarea
           label="Trends & cultural context"

@@ -44,7 +44,7 @@ export const EMPTY_NOTES: ResearchNotes = {
   trends: "",
 };
 
-// ── Competitor research (Step 5 area) ────────────────────────────────────────
+// ── Competitor research (Step 3 area) ────────────────────────────────────────
 // These mirror the Cleo-shared `videos` / `creators` / `configs` tables (camelCase
 // columns), plus the `client_id` added in migration 0012. `clientId === null`
 // means a legacy/global (Cleo) row — visible to every client, read-only in Rumi.
@@ -86,7 +86,7 @@ export interface CompetitorConfig {
   clientId: string | null;
 }
 
-/** Step 5 insights derived (client-side, no AI) from the analysed videos. */
+/** Step 3 insights derived (client-side, no AI) from the analysed videos. */
 export interface Step5Insights {
   videoCount: number;
   hooks: { text: string; creator: string | null; views: number | null }[];

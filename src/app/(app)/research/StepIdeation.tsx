@@ -39,7 +39,7 @@ export default function StepIdeation({
     setError(null);
     start(async () => {
       try {
-        // Selected competitor videos (from Step 5) now feed the synthesis.
+        // Selected competitor videos (from Step 3) now feed the synthesis.
         const result = await generateIdeas(clientId, notes, selectedVideos);
         onIdeas(result);
         setSaved(new Set());

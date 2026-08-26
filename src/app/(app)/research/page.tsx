@@ -3,9 +3,10 @@ import PageHeader from "@/components/PageHeader";
 import { getActiveClient } from "@/lib/activeClient";
 import Research from "./Research";
 
-// Research — the 5-step flow that replaces Cleo's Ideation tab:
+// Research — the 4-step flow that replaces Cleo's Ideation tab:
 //   1. Your analytics   2. Client interactions (+ transcript analyser)
-//   3. External forums (Reddit scraper)   4. Ideation   5. Hooks & formats
+//   3. Competitor research (competitor videos/pipeline/creators/configs, then
+//      the forums + Reddit scraper)   4. Ideation
 // Scoped to the active client via getActiveClient() + the admin ?as= switcher.
 // Per-client progress is persisted in localStorage, keyed by activeClientId.
 export default async function ResearchPage({

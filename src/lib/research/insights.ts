@@ -1,6 +1,6 @@
 import type { Video, Step5Insights } from "./types";
 
-// Step 5 insight derivation — pure, no AI, no network. Runs from the same
+// Step 3 insight derivation — pure, no AI, no network. Runs from the same
 // `videos` array the Videos tab already loaded. "Hooks worth stealing / most
 // common topics / most used formats", derived heuristically from each analysed
 // video's `analysis` + `newConcepts` text.

@@ -96,3 +96,22 @@ export function Pill({ children }: { children: ReactNode }) {
     </span>
   );
 }
+
+// Sub-section header — used inside a step that stacks more than one block
+// (e.g. Step 3 = competitor machinery + forums research).
+export function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="border-b border-line pb-3">
+      <h3 className="font-display text-lg text-ink">{title}</h3>
+      {description && (
+        <p className="mt-1.5 max-w-2xl text-sm text-ink-soft">{description}</p>
+      )}
+    </div>
+  );
+}
