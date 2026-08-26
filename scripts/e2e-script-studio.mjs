@@ -6,14 +6,18 @@
 //   node scripts/e2e-script-studio.mjs --teardown        # remove all E2E rows (idempotent)
 //
 // WHAT IT PROVES
-//   The Script Studio generate → save → status-change → delete path, against a
+//   The Session-6 two-pass Script Studio path: brief → 10 hooks → pick one →
+//   script written to that hook → save → status-change → delete, against a
 //   disposable @rumi.test client that HAS a voice_transcript (so the voice-sample
-//   branch of the context builder is exercised). It replicates the server action's
-//   substance (same shipped SCRIPT_GENERATOR prompt read from src/lib/prompts,
-//   same context+voice block, same insert shape) because the action itself is a
-//   "use server" module (next/cache) that can't be imported into plain node.
-//   It also asserts the output carries NO bracketed production markers, for any
-//   content type — the four beats and the words, nothing else.
+//   branch of the context builder is exercised). It replicates the server actions'
+//   substance (same shipped HOOK_GENERATOR + SCRIPT_GENERATOR prompts read from
+//   src/lib/prompts, same context+voice block, same insert shape) because the
+//   actions themselves are a "use server" module (next/cache) that can't be
+//   imported into plain node.
+//   Assertions: 10 parseable hooks, no em dash / global banned word in any hook,
+//   the chosen hook's angle survives into the script, no bracketed production
+//   markers for any content type, and hook_type/audience_stage saved NULL now
+//   that both selectors are gone from the form.
 //
 // SAFETY (mirrors scripts/e2e-strategy.mjs)
 //   • Fixed disposable identity e2e-script-studio@rumi.test — the stable key.
@@ -137,15 +141,48 @@ function loadSystemPrompt() {
   return JSON.parse(m[1]);
 }
 
+// HOOK_GENERATOR is a plain template literal (hand-written, not ported), so it is
+// read between its backticks rather than JSON-parsed.
+function loadHookPrompt() {
+  const raw = readFileSync(new URL("../src/lib/prompts/hook-generator.ts", import.meta.url), "utf8");
+  const m = raw.match(/export const HOOK_GENERATOR = `([\s\S]*?)`;/);
+  if (!m) throw new Error("could not read HOOK_GENERATOR out of the prompt module");
+  return m[1];
+}
+
+// Mirrors parseHooks() in src/lib/prompts/hook-generator.ts. Kept in step with it.
+function parseHooks(raw, max) {
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(/^[-*•]?\s*\d{1,2}\s*[.)\-:]\s*(.+)$/);
+    const text = (m ? m[1] : "").trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, "").trim();
+    if (text.length < 3) continue;
+    if (!out.includes(text)) out.push(text);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+const HOOK_COUNT = 10;
+const BANNED_WORDS = [
+  "chaos", "intention", "quietly", "pivotal", "robust", "delve", "tapestry", "harness",
+  "underscore", "at its core", "nuanced", "unleash", "foster", "dive in", "game-changer",
+  "groundbreaking", "revolutionary", "seamlessly", "leverage", "synergy", "optimise",
+  "utilise", "deliverables", "landscape", "elevate", "crucial",
+];
+
 // Content type under test. Default talking_head; override with --type=broll_text
-// etc. Descriptions match src/lib/scripts.ts, which is what the action puts in the brief.
+// etc. Descriptions match src/lib/scripts.ts CONTENT_TYPES, which is what the
+// action puts in the brief. screen_record and clone were dropped in Session 6 and
+// are deliberately absent, so --type=clone now fails loudly instead of testing a
+// format the client can no longer choose.
 const TYPE_DESCRIPTIONS = {
   talking_head: "Just you, speaking straight to camera. No frills.",
   storytelling: "A personal story told to camera, with a beginning, middle and turn.",
   carousel: "Swipeable slides of text. Silent, made to be read not spoken.",
   broll_text: "Voiceover over background footage.",
-  screen_record: "You record your screen and narrate. Show the thing, explain it.",
-  clone: "React to a post, comment or video pinned beside you.",
 };
 
 async function runLive(contentType) {
@@ -175,21 +212,63 @@ async function runLive(contentType) {
   ctxParts.push("## VOICE SAMPLE (match this exact speaking voice, rhythm and word choice)", onb.voice_transcript, "");
   const context = ctxParts.join("\n").trim();
 
+  const TOPIC = "Why posting more often is not why coaches stay broke, it's the offer.";
+  const PILLAR = "connect";
+  const PILLAR_LABEL = "Connect";
+  const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+
+  // Shared brief block — identical shape to briefBlock() in the server action.
+  const briefBlock = [
+    `- Content type: ${contentType} (${TYPE_DESCRIPTIONS[contentType]})`,
+    `- Content pillar: ${PILLAR_LABEL}`,
+    "",
+    "Topic / brief from the client:",
+    TOPIC,
+  ];
+
+  // ── PASS 1: ten hooks ──
+  console.log(`Calling ${MODEL} for ${HOOK_COUNT} hooks…`);
+  const hookBrief = [
+    `Now write ${HOOK_COUNT} hooks for this brief. Output only the ${HOOK_COUNT} numbered lines.`,
+    "",
+    ...briefBlock,
+  ].join("\n");
+  const hookMsg = await anthropic.messages.create({
+    model: MODEL, max_tokens: 900, system: loadHookPrompt(),
+    messages: [{ role: "user", content: `${context}\n\n---\n\n${hookBrief}` }],
+  });
+  const hookRaw = hookMsg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  const hooks = parseHooks(hookRaw, HOOK_COUNT);
+
+  console.log("\n─── HOOKS ───");
+  hooks.forEach((h, i) => console.log(`${String(i + 1).padStart(2)}. ${h}`));
+
+  const hookEmDash = hooks.filter((h) => h.includes("—"));
+  const hookBanned = hooks.flatMap((h) =>
+    BANNED_WORDS.filter((w) => new RegExp(`\\b${w.replace(/[-]/g, "\\-")}\\b`, "i").test(h)).map((w) => `${w} → "${h}"`)
+  );
+  const hookMultiline = hooks.filter((h) => h.includes("\n"));
+
+  // The client picks one. Pick deterministically (the first, i.e. the model's
+  // strongest) so re-runs are comparable.
+  const chosenHook = hooks[0] ?? "";
+  console.log(`\nchosen hook: ${chosenHook}`);
+
+  // ── PASS 2: the script, written to that hook ──
   const brief = [
     "Now write ONE script with these parameters. Follow the FORMAT-SPECIFIC OUTPUT rules for the content type exactly.",
     "",
-    `- Content type: ${contentType} (${TYPE_DESCRIPTIONS[contentType]})`,
-    "- Hook type: Contrarian take",
-    "- Content pillar: Perspective",
-    "- Audience stage: Discovery",
-    "- Target length: 60 seconds",
+    ...briefBlock,
     "",
-    "Topic / brief from the client:",
-    "Why posting more often is not why coaches stay broke — it's the offer.",
+    "THE HOOK IS ALREADY CHOSEN. The client picked this line, so the script is written to its angle:",
+    chosenHook,
+    "",
+    "Open on that hook. Use it as the HOOK beat close to word for word, tightening it only if it does not scan out loud. Do not swap it for a different angle, and do not write a second hook in front of it. BUILD, DELIVER and CLOSE all have to pay off the promise this line makes.",
+    "",
+    "- Target length: 60 seconds",
   ].join("\n");
 
-  console.log(`Calling ${MODEL}…`);
-  const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  console.log(`\nCalling ${MODEL} for the script…`);
   const msg = await anthropic.messages.create({
     model: MODEL, max_tokens: 2500, system: loadSystemPrompt(),
     messages: [{ role: "user", content: `${context}\n\n---\n\n${brief}` }],
@@ -197,13 +276,14 @@ async function runLive(contentType) {
   const script = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
   if (!script) throw new Error("empty script returned");
 
-  // Save exactly as the action does.
+  // Save exactly as the action does: hook_type / audience_stage are NULL now
+  // that neither selector exists in the form.
   const { data: saved, error: insErr } = await admin.from("scripts").insert({
-    user_id: userId, topic: "Why posting more often is not why coaches stay broke — it's the offer.",
-    content_type: contentType, hook_type: "contrarian", pillar: "perspective",
-    audience_stage: "discovery", length: "60 seconds", additional_context: null,
+    user_id: userId, topic: TOPIC,
+    content_type: contentType, hook_type: null, pillar: PILLAR,
+    audience_stage: null, length: "60 seconds", additional_context: null,
     generated_script: script, status: "drafted",
-  }).select("id, status, content_type, generated_script").single();
+  }).select("id, status, content_type, pillar, hook_type, audience_stage, generated_script").single();
   if (insErr) throw new Error(`save failed: ${insErr.message}`);
 
   // Library read (owner-filtered) + status change + delete.
@@ -214,16 +294,36 @@ async function runLive(contentType) {
   const { data: del } = await admin.from("scripts").delete().eq("id", saved.id).eq("user_id", userId).select("id");
 
   console.log("\n─── RESULTS ───");
+  console.log("hooks parsed         :", hooks.length, `(expect ${HOOK_COUNT})`);
+  console.log("hooks w/ em dash     :", hookEmDash.length === 0 ? "none ✓" : `FOUND → ${hookEmDash.join(" | ")}`);
+  console.log("hooks w/ banned word :", hookBanned.length === 0 ? "none ✓" : `FOUND → ${hookBanned.join(" | ")}`);
+  console.log("hooks on one line    :", hookMultiline.length === 0 ? "yes ✓" : "FOUND multi-line hook");
   console.log("saved status         :", saved.status, "(expect drafted)");
   console.log("content_type saved   :", saved.content_type);
+  console.log("pillar saved         :", saved.pillar, "(expect connect)");
+  console.log("hook_type saved      :", saved.hook_type, "(expect null)");
+  console.log("audience_stage saved :", saved.audience_stage, "(expect null)");
   console.log("library rows for user:", lib.length, "(expect 1)");
   console.log("status after change  :", afterStatus.status, "(expect filmed)");
   console.log("delete removed rows  :", del.length, "(expect 1)");
-  const voiceEcho = /head in|dead simple|lovely lass|does my head|not one|it's the offer|not the volume/i.test(script);
+  const voiceEcho = /head in|dead simple|lovely lass|does my head|not one|the offer|not the volume/i.test(script);
   console.log("voice/topic in script:", voiceEcho ? "yes ✓" : "check manually");
 
-  // No bracketed production markers, any format. This is the whole point of the
-  // prompt change: HOOK/BUILD/DELIVER/CLOSE with the words underneath, nothing else.
+  // The whole point of the flow change: the script has to OPEN on the hook the
+  // client chose. Compare the distinctive words of the hook against the first
+  // ~350 chars of the script (HOOK beat) rather than demanding a literal match,
+  // because the prompt allows tightening the line so it scans out loud.
+  const hookWords = chosenHook.toLowerCase().match(/[a-z']{5,}/g) ?? [];
+  const opening = script.slice(0, 350).toLowerCase();
+  const overlap = hookWords.filter((w) => opening.includes(w));
+  const hookHonoured = hookWords.length === 0 || overlap.length / hookWords.length >= 0.5;
+  console.log(
+    "script opens on hook :",
+    hookHonoured ? `yes ✓ (${overlap.length}/${hookWords.length} key words)` : `NO (${overlap.length}/${hookWords.length})`
+  );
+
+  // No bracketed production markers, any format. HOOK/BUILD/DELIVER/CLOSE with
+  // the words underneath, nothing else.
   const brackets = script.match(/\[[^\]\n]*\]/g) ?? [];
   const noBrackets = brackets.length === 0;
   console.log("bracketed markers    :", noBrackets ? "none ✓" : `FOUND ${brackets.length} → ${brackets.slice(0, 5).join(" | ")}`);
@@ -236,8 +336,13 @@ async function runLive(contentType) {
   const gone = await findAuthUser(E2E_EMAIL);
   console.log("auth user after teardown:", gone ? "STILL EXISTS (!!)" : "gone ✓");
 
-  const ok = saved.status === "drafted" && afterStatus.status === "filmed" && del.length === 1 && lib.length === 1 && !gone && noBrackets;
-  console.log(ok ? "\n✓ PASS — generate/save/status/delete all verified, no rows left." : "\n✗ FAIL — see mismatches above.");
+  const ok =
+    hooks.length === HOOK_COUNT && hookEmDash.length === 0 && hookBanned.length === 0 &&
+    hookMultiline.length === 0 && hookHonoured &&
+    saved.status === "drafted" && saved.pillar === "connect" &&
+    saved.hook_type === null && saved.audience_stage === null &&
+    afterStatus.status === "filmed" && del.length === 1 && lib.length === 1 && !gone && noBrackets;
+  console.log(ok ? "\n✓ PASS — hooks/pick/script/save/status/delete all verified, no rows left." : "\n✗ FAIL — see mismatches above.");
   if (!ok) process.exitCode = 1;
 }
 

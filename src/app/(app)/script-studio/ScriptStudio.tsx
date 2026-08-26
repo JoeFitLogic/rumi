@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   Sparkles,
   Loader2,
@@ -9,22 +9,28 @@ import {
   Check,
   Trash2,
   ChevronDown,
+  ChevronLeft,
+  RefreshCw,
+  PenLine,
   Search,
   AlertTriangle,
 } from "lucide-react";
 import Markdown from "@/components/Markdown";
 import {
   CONTENT_TYPES,
-  HOOK_TYPES,
+  ALL_CONTENT_TYPES,
   PILLARS,
-  AUDIENCE_STAGES,
+  ALL_PILLARS,
+  LEGACY_AUDIENCE_STAGES,
   LENGTHS,
   STATUSES,
+  HOOK_COUNT,
   normalizeStatus,
   labelFor,
   type ScriptRow,
 } from "@/lib/scripts";
 import {
+  generateHooks,
   generateScript,
   refineScript,
   updateScriptStatus,
@@ -61,6 +67,10 @@ export default function ScriptStudio({
   );
 
   const active = scripts.find((s) => s.id === activeId) ?? null;
+  // Step 2 renders ten hooks, so a fresh draft lands well below the fold. Bring
+  // it into view rather than leaving the client staring at the list they just
+  // picked from.
+  const draftRef = useRef<HTMLDivElement>(null);
 
   function upsert(row: ScriptRow) {
     setScripts((prev) => {
@@ -103,15 +113,20 @@ export default function ScriptStudio({
               onGenerated={(row) => {
                 upsert(row);
                 setActiveId(row.id);
+                requestAnimationFrame(() =>
+                  draftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                );
               }}
             />
             {active && (
-              <ResultPanel
-                key={active.id}
-                clientId={clientId}
-                script={active}
-                onRefined={(row) => upsert(row)}
-              />
+              <div ref={draftRef} className="scroll-mt-6">
+                <ResultPanel
+                  key={active.id}
+                  clientId={clientId}
+                  script={active}
+                  onRefined={(row) => upsert(row)}
+                />
+              </div>
             )}
           </div>
 
@@ -178,6 +193,14 @@ function ViewToggle({
 }
 
 // ── Generator (left) ───────────────────────────────────────────────────────
+//
+// Two steps, because the client picks a written hook rather than a hook *type*:
+//   1. brief  — topic, format, pillar, length, optional context → "Generate hooks"
+//   2. hooks  — ten hooks in their voice, pick ONE → the script is written to it
+// The brief survives a trip back and forth, so re-running hooks after a tweak is
+// cheap. Only step 2's "Write the script" writes a row.
+type Step = "brief" | "hooks";
+
 function Generator({
   clientId,
   isAdmin,
@@ -196,20 +219,48 @@ function Generator({
   onGenerated: (row: ScriptRow) => void;
 }) {
   const [contentType, setContentType] = useState(CONTENT_TYPES[0].value);
-  const [hookType, setHookType] = useState(HOOK_TYPES[0].value);
-  const [pillar, setPillar] = useState(PILLARS[2].value); // perspective
-  const [audienceStage, setAudienceStage] = useState(AUDIENCE_STAGES[0].value);
+  const [pillar, setPillar] = useState(PILLARS[0].value); // connect
   const [length, setLength] = useState(LENGTHS[1].value); // 60s
   const [additionalContext, setAdditionalContext] = useState("");
+
+  const [step, setStep] = useState<Step>("brief");
+  const [hooks, setHooks] = useState<string[]>([]);
+  const [chosenHook, setChosenHook] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const ctDesc = CONTENT_TYPES.find((c) => c.value === contentType)?.description;
+  const pillarDesc = PILLARS.find((p) => p.value === pillar)?.description;
 
-  function run() {
+  function runHooks() {
     setError(null);
     if (!topic.trim()) {
       setError("Add a topic first.");
+      return;
+    }
+    start(async () => {
+      try {
+        const list = await generateHooks({
+          clientId,
+          topic,
+          contentType,
+          pillar,
+          additionalContext,
+        });
+        setHooks(list);
+        setChosenHook(null);
+        setStep("hooks");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't write the hooks.");
+      }
+    });
+  }
+
+  function runScript() {
+    setError(null);
+    if (!chosenHook) {
+      setError("Pick a hook first.");
       return;
     }
     start(async () => {
@@ -218,10 +269,9 @@ function Generator({
           clientId,
           topic,
           contentType,
-          hookType,
           pillar,
-          audienceStage,
           length,
+          chosenHook,
           additionalContext,
         });
         onGenerated(row);
@@ -233,82 +283,212 @@ function Generator({
 
   return (
     <section className="card">
-      <h2 className="font-display text-lg text-ink">Generate a script</h2>
-      <p className="mt-1 text-sm text-ink-soft">
-        Written in {clientFirstName}&apos;s voice from their onboarding answers.
-      </p>
+      <StepHeader step={step} />
 
       {isAdmin && !hasVoice && (
         <div className="mt-4 flex gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
           <span>
-            No voice sample yet — scripts will sound more generic. Add a{" "}
+            No voice sample yet — hooks and scripts will sound more generic. Add a{" "}
             <span className="font-medium">voice transcript</span> to{" "}
             {clientFirstName}&apos;s onboarding to match how they actually speak.
           </span>
         </div>
       )}
 
-      <div className="mt-5 space-y-4">
-        <div>
-          <label className="mb-1.5 block text-sm text-ink">Topic</label>
-          <textarea
-            className="input min-h-[90px] resize-y"
-            placeholder="What's the video about? Paste the idea, the angle, any notes…"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-          />
+      {step === "brief" ? (
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm text-ink">Topic</label>
+            <textarea
+              className="input min-h-[90px] resize-y"
+              placeholder="What's the video about? Paste the idea, the angle, any notes…"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Select
+              label="Content type"
+              value={contentType}
+              onChange={setContentType}
+              options={CONTENT_TYPES}
+            />
+            {ctDesc && <p className="mt-1.5 text-xs text-ink-soft">{ctDesc}</p>}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Select label="Pillar" value={pillar} onChange={setPillar} options={PILLARS} />
+              {pillarDesc && <p className="mt-1.5 text-xs text-ink-soft">{pillarDesc}</p>}
+            </div>
+            <Select label="Length" value={length} onChange={setLength} options={LENGTHS} />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm text-ink">
+              Additional context <span className="text-ink-soft">(optional)</span>
+            </label>
+            <textarea
+              className="input min-h-[64px] resize-y"
+              placeholder="Anything else to steer it — a story to include, a CTA, a product to mention…"
+              value={additionalContext}
+              onChange={(e) => setAdditionalContext(e.target.value)}
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={runHooks} disabled={pending} className="btn-primary">
+              {pending ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" /> Writing hooks…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={15} strokeWidth={1.75} /> Generate hooks
+                </>
+              )}
+            </button>
+            {hooks.length > 0 && !pending && (
+              <button onClick={() => setStep("hooks")} className="btn-ghost">
+                Back to your {hooks.length} hooks
+              </button>
+            )}
+          </div>
         </div>
+      ) : (
+        <HookPicker
+          hooks={hooks}
+          chosenHook={chosenHook}
+          onChoose={setChosenHook}
+          pending={pending}
+          error={error}
+          onBack={() => {
+            setError(null);
+            setStep("brief");
+          }}
+          onRegenerate={runHooks}
+          onWrite={runScript}
+        />
+      )}
+    </section>
+  );
+}
 
-        <div>
-          <Select
-            label="Content type"
-            value={contentType}
-            onChange={setContentType}
-            options={CONTENT_TYPES}
-          />
-          {ctDesc && <p className="mt-1.5 text-xs text-ink-soft">{ctDesc}</p>}
+function StepHeader({ step }: { step: Step }) {
+  const steps: { key: Step; n: number; label: string }[] = [
+    { key: "brief", n: 1, label: "Your brief" },
+    { key: "hooks", n: 2, label: "Pick a hook" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {steps.map((s, i) => (
+        <div key={s.key} className="flex items-center gap-2">
+          {i > 0 && <span className="text-ink-soft">/</span>}
+          <span
+            className={`flex items-center gap-1.5 text-sm ${
+              s.key === step ? "font-medium text-ink" : "text-ink-soft"
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                s.key === step ? "bg-gold-tint text-gold-deep" : "bg-cream text-ink-soft"
+              }`}
+            >
+              {s.n}
+            </span>
+            {s.label}
+          </span>
         </div>
+      ))}
+    </div>
+  );
+}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Hook" value={hookType} onChange={setHookType} options={HOOK_TYPES} />
-          <Select label="Length" value={length} onChange={setLength} options={LENGTHS} />
-          <Select label="Pillar" value={pillar} onChange={setPillar} options={PILLARS} />
-          <Select
-            label="Audience stage"
-            value={audienceStage}
-            onChange={setAudienceStage}
-            options={AUDIENCE_STAGES}
-          />
-        </div>
+// ── Step 2: the ten hooks ────────────────────────────────────────────────────
+function HookPicker({
+  hooks,
+  chosenHook,
+  onChoose,
+  pending,
+  error,
+  onBack,
+  onRegenerate,
+  onWrite,
+}: {
+  hooks: string[];
+  chosenHook: string | null;
+  onChoose: (h: string) => void;
+  pending: boolean;
+  error: string | null;
+  onBack: () => void;
+  onRegenerate: () => void;
+  onWrite: () => void;
+}) {
+  return (
+    <div className="mt-5 space-y-4">
+      <p className="text-sm text-ink-soft">
+        {hooks.length === HOOK_COUNT
+          ? `${HOOK_COUNT} hooks, written in your voice.`
+          : `${hooks.length} hooks, written in your voice.`}{" "}
+        Pick the one you&apos;d actually say out loud. Rumi writes the rest of the
+        script to that angle.
+      </p>
 
-        <div>
-          <label className="mb-1.5 block text-sm text-ink">
-            Additional context <span className="text-ink-soft">(optional)</span>
-          </label>
-          <textarea
-            className="input min-h-[64px] resize-y"
-            placeholder="Anything else to steer it — a story to include, a CTA, a product to mention…"
-            value={additionalContext}
-            onChange={(e) => setAdditionalContext(e.target.value)}
-          />
-        </div>
+      <ul className="space-y-2">
+        {hooks.map((hook, i) => {
+          const selected = hook === chosenHook;
+          return (
+            <li key={`${i}-${hook}`}>
+              <button
+                onClick={() => onChoose(hook)}
+                aria-pressed={selected}
+                disabled={pending}
+                className={`flex w-full items-start gap-3 rounded-lg border p-3.5 text-left transition-colors disabled:opacity-60 ${
+                  selected
+                    ? "border-gold bg-gold-tint/40"
+                    : "border-line bg-paper hover:border-gold/50 hover:bg-cream/50"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    selected ? "bg-gold text-white" : "bg-cream text-ink-soft"
+                  }`}
+                >
+                  {selected ? <Check size={12} strokeWidth={3} /> : i + 1}
+                </span>
+                <span className="text-sm leading-relaxed text-ink">{hook}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button onClick={run} disabled={pending} className="btn-primary">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onWrite} disabled={pending || !chosenHook} className="btn-primary">
           {pending ? (
             <>
-              <Loader2 size={15} className="animate-spin" /> Writing…
+              <Loader2 size={15} className="animate-spin" /> Working…
             </>
           ) : (
             <>
-              <Sparkles size={15} strokeWidth={1.75} /> Generate script
+              <PenLine size={15} strokeWidth={1.75} /> Write the script
             </>
           )}
         </button>
+        <button onClick={onRegenerate} disabled={pending} className="btn-ghost">
+          <RefreshCw size={15} strokeWidth={1.75} /> New hooks
+        </button>
+        <button onClick={onBack} disabled={pending} className="btn-ghost">
+          <ChevronLeft size={15} strokeWidth={1.75} /> Change brief
+        </button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -434,7 +614,7 @@ function Library({
         <div className="grid grid-cols-2 gap-3">
           <BareSelect value={typeFilter} onChange={setTypeFilter}>
             <option value="all">All types</option>
-            {CONTENT_TYPES.map((o) => (
+            {ALL_CONTENT_TYPES.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -494,10 +674,12 @@ function ScriptCard({
   const [pending, start] = useTransition();
   const status = normalizeStatus(script.status);
 
+  // ALL_* / LEGACY_* lists, not the picker lists: 1900 Cleo rows carry retired
+  // content types, pillars and audience stages, and they still need a label.
   const badges = [
-    labelFor(CONTENT_TYPES, script.content_type),
-    labelFor(PILLARS, script.pillar),
-    labelFor(AUDIENCE_STAGES, script.audience_stage),
+    labelFor(ALL_CONTENT_TYPES, script.content_type),
+    labelFor(ALL_PILLARS, script.pillar),
+    labelFor(LEGACY_AUDIENCE_STAGES, script.audience_stage),
   ].filter(Boolean);
 
   function changeStatus(next: string) {

@@ -50,10 +50,21 @@ export default async function ScriptStudioPage({
 
   return (
     <div>
+      {/* Niamh's line, attributed to Rumi. Her wording promised "one of the
+          provided prompts" — there is no prompt-starter library yet, so the ask
+          is worded as context instead of pointing at something that isn't there.
+          Restore the original once starters exist (Niamh's call).
+          The em dash stays: the no-em-dash rule is a SCRIPT rule
+          (script-generator.ts), not a UI-copy rule, and the app's own chrome
+          already uses them. */}
       <PageHeader
         eyebrow="Script Studio"
-        title="Write scripts in your voice"
-        description="Generate, refine, and organise your content scripts in one place."
+        title="Generate Your Script"
+        description={
+          "\u201CRemember guys, I\u2019m AI, not a mindreader (not yet) \u2014 give me as " +
+          "much context as you can and I\u2019ll write what\u2019s actually on your " +
+          "mind\u201D \u2014 Rumi"
+        }
       />
       <ScriptStudio
         clientId={ctx.activeClientId}

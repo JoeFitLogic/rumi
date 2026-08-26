@@ -1,13 +1,22 @@
 // Script Studio — shared vocabulary + row shape.
 //
 // Values below MUST match what already lives in the shared `scripts` table
-// (Cleo wrote 1500+ rows), so the generator's saves and the legacy library
+// (Cleo wrote 1900+ rows), so the generator's saves and the legacy library
 // speak the same language and existing filters work:
 //   content_type: talking_head | storytelling | carousel | broll_text | screen_record | clone
-//   pillar:       personal | proof | perspective
-//   audience_stage: discovery | familiarity | trust | conversion
-//   hook_type:    mistake | contrarian | specific_audience | result | bold_claim | open_loop
+//   pillar:       connect | nurture | convert   (new)  ·  personal | proof | perspective (legacy)
+//   audience_stage: discovery | familiarity | trust | conversion   (legacy)
+//   hook_type:    mistake | contrarian | specific_audience | result | bold_claim | open_loop (legacy)
 // These are stored lowercase; the labels below are display-only.
+//
+// LEGACY vs OFFERED (Session 6, client feedback):
+//   The picker now offers a SUBSET. "screen_record" and "clone" were dropped as
+//   content types, and the hook-type + audience-stage selectors were removed
+//   entirely (the client picks a written hook instead — see generateHooks).
+//   The pillar model moved to Connect / Nurture / Convert to match the strategy
+//   doc's Content Model. The old values are NOT rewritten in the DB: the *_ALL
+//   lists below exist purely so the library can still label and filter the 1900
+//   rows that carry them. Never offer a LEGACY_* list in a form.
 
 export interface ScriptRow {
   id: string;
@@ -34,7 +43,7 @@ export interface Option {
   description?: string;
 }
 
-// Content formats, each with a one-line plain-language description.
+// Content formats offered in the picker, each with a one-line description.
 export const CONTENT_TYPES: Option[] = [
   {
     value: "talking_head",
@@ -56,19 +65,52 @@ export const CONTENT_TYPES: Option[] = [
     label: "B-roll + text",
     description: "Voiceover over background footage.",
   },
+];
+
+/** Retired formats. Label + filter only, never offered in the picker. */
+export const LEGACY_CONTENT_TYPES: Option[] = [
+  { value: "screen_record", label: "Screen recording" },
+  { value: "clone", label: "Green screen / react" },
+];
+
+export const ALL_CONTENT_TYPES: Option[] = [...CONTENT_TYPES, ...LEGACY_CONTENT_TYPES];
+
+// The Content Model from the strategy doc: three jobs a piece of content does,
+// side by side. Not a funnel, not a hierarchy. Descriptions are lifted from
+// STRATEGY_PART_A section 6 so the client reads the same words in both places.
+export const PILLARS: Option[] = [
   {
-    value: "screen_record",
-    label: "Screen recording",
-    description: "You record your screen and narrate. Show the thing, explain it.",
+    value: "connect",
+    label: "Connect",
+    description: "Reaches people who have never heard of you. Broad, low context, built to travel.",
   },
   {
-    value: "clone",
-    label: "Green screen / react",
-    description: "React to a post, comment or video pinned beside you.",
+    value: "nurture",
+    label: "Nurture",
+    description: "Builds trust with people already watching. Story, point of view, the reason they stay.",
+  },
+  {
+    value: "convert",
+    label: "Convert",
+    description: "Moves someone from watching to buying. High intent, aimed at the person already close.",
   },
 ];
 
-export const HOOK_TYPES: Option[] = [
+/** Retired pillar names from Cleo's rows. Label + filter only. */
+export const LEGACY_PILLARS: Option[] = [
+  { value: "personal", label: "Personal" },
+  { value: "proof", label: "Proof" },
+  { value: "perspective", label: "Perspective" },
+];
+
+export const ALL_PILLARS: Option[] = [...PILLARS, ...LEGACY_PILLARS];
+
+/**
+ * Retired selectors. The client no longer picks either — hooks are written and
+ * chosen (generateHooks), and audience stage was folded into the pillar model.
+ * Kept only so old rows still render a readable badge in the library.
+ */
+export const LEGACY_HOOK_TYPES: Option[] = [
   { value: "mistake", label: "Common mistake" },
   { value: "contrarian", label: "Contrarian take" },
   { value: "specific_audience", label: "Call out a specific audience" },
@@ -77,13 +119,7 @@ export const HOOK_TYPES: Option[] = [
   { value: "open_loop", label: "Open loop / curiosity" },
 ];
 
-export const PILLARS: Option[] = [
-  { value: "personal", label: "Personal" },
-  { value: "proof", label: "Proof" },
-  { value: "perspective", label: "Perspective" },
-];
-
-export const AUDIENCE_STAGES: Option[] = [
+export const LEGACY_AUDIENCE_STAGES: Option[] = [
   { value: "discovery", label: "Discovery" },
   { value: "familiarity", label: "Familiarity" },
   { value: "trust", label: "Trust" },
@@ -117,3 +153,6 @@ export function labelFor(options: Option[], value: string | null | undefined): s
   if (!value) return "";
   return options.find((o) => o.value === value)?.label ?? value;
 }
+
+/** How many hooks generateHooks asks for, and the most the UI will render. */
+export const HOOK_COUNT = 10;

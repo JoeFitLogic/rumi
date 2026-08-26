@@ -6,11 +6,11 @@ import { getActiveClient } from "@/lib/activeClient";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ONBOARDING_FIELDS, GROUP_ORDER } from "@/lib/onboarding";
 import { SCRIPT_GENERATOR } from "@/lib/prompts/script-generator";
+import { HOOK_GENERATOR, parseHooks } from "@/lib/prompts/hook-generator";
 import {
   CONTENT_TYPES,
-  HOOK_TYPES,
   PILLARS,
-  AUDIENCE_STAGES,
+  HOOK_COUNT,
   labelFor,
   type ScriptRow,
 } from "@/lib/scripts";
@@ -19,20 +19,11 @@ import {
 // without a code change (same pattern as STRATEGY_MODEL for the strategy task).
 const MODEL = process.env.SCRIPT_MODEL ?? "claude-sonnet-4-6";
 const MAX_TOKENS = 2500;
+// Ten one-line hooks is a small answer; no need to pay for a 2500-token ceiling.
+const HOOK_MAX_TOKENS = 900;
 
 const SELECT =
   "id, user_id, topic, content_type, hook_type, pillar, audience_stage, length, additional_context, generated_script, status, created_at";
-
-export interface GenerateInput {
-  clientId: string;
-  topic: string;
-  contentType: string;
-  hookType: string;
-  pillar: string;
-  audienceStage: string;
-  length: string;
-  additionalContext?: string;
-}
 
 /**
  * Re-validate the caller against the clientId the browser sent. NEVER trust the
@@ -63,6 +54,9 @@ function textFromMessage(msg: {
  * the voice sample (voice_transcript) so the script sounds like them. Read with
  * the service role + explicit owner filter — the caller is already authorized
  * for this client, and this dodges the shared-DB RLS ambiguity on `scripts`.
+ *
+ * Both generation passes (hooks and script) share this, so the ten hooks and
+ * the script that follows are written off the exact same voice data.
  */
 async function buildClientContext(
   db: ReturnType<typeof createAdminClient>,
@@ -105,68 +99,131 @@ async function buildClientContext(
   return parts.join("\n").trim();
 }
 
-function briefLine(input: {
+async function callClaude(
+  system: string,
+  userMessage: string,
+  maxTokens: number = MAX_TOKENS
+): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const msg = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content: userMessage }],
+  });
+  const text = textFromMessage(msg);
+  if (!text) throw new Error("The model returned an empty response. Try again.");
+  return text;
+}
+
+/** The brief both passes share: format, pillar, topic, the client's own notes. */
+function briefBlock(input: {
   contentType: string;
-  hookType: string;
   pillar: string;
-  audienceStage: string;
-  length: string;
   topic: string;
   additionalContext?: string;
-}): string {
+}): string[] {
   const ct = CONTENT_TYPES.find((c) => c.value === input.contentType);
   return [
-    "Now write ONE script with these parameters. Follow the FORMAT-SPECIFIC OUTPUT rules for the content type exactly.",
-    "",
     `- Content type: ${input.contentType}${ct?.description ? ` (${ct.description})` : ""}`,
-    `- Hook type: ${labelFor(HOOK_TYPES, input.hookType)}`,
     `- Content pillar: ${labelFor(PILLARS, input.pillar)}`,
-    `- Audience stage: ${labelFor(AUDIENCE_STAGES, input.audienceStage)}`,
-    `- Target length: ${input.length}`,
     "",
     "Topic / brief from the client:",
     input.topic.trim(),
     input.additionalContext && input.additionalContext.trim()
       ? `\nAdditional context:\n${input.additionalContext.trim()}`
       : "",
-  ]
-    .filter((l) => l !== "")
-    .join("\n");
+  ].filter((l) => l !== "");
 }
 
-async function callClaude(system: string, userMessage: string): Promise<string> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system,
-    messages: [{ role: "user", content: userMessage }],
-  });
-  const text = textFromMessage(msg);
-  if (!text) throw new Error("The model returned an empty script. Try again.");
-  return text;
+// ── Step 1: hooks ────────────────────────────────────────────────────────────
+
+export interface HookInput {
+  clientId: string;
+  topic: string;
+  contentType: string;
+  pillar: string;
+  additionalContext?: string;
+}
+
+/**
+ * Write HOOK_COUNT hooks for this topic in the client's voice. Nothing is
+ * saved — hooks are a throwaway shortlist the client picks from, and only the
+ * script they choose becomes a `scripts` row.
+ */
+export async function generateHooks(input: HookInput): Promise<string[]> {
+  await authorize(input.clientId);
+  if (!input.topic.trim()) throw new Error("Add a topic first.");
+
+  const db = createAdminClient();
+  const context = await buildClientContext(db, input.clientId);
+
+  const brief = [
+    `Now write ${HOOK_COUNT} hooks for this brief. Output only the ${HOOK_COUNT} numbered lines.`,
+    "",
+    ...briefBlock(input),
+  ].join("\n");
+
+  const raw = await callClaude(HOOK_GENERATOR, `${context}\n\n---\n\n${brief}`, HOOK_MAX_TOKENS);
+  const hooks = parseHooks(raw, HOOK_COUNT);
+  if (hooks.length === 0) {
+    throw new Error("Rumi didn't return any usable hooks. Try again.");
+  }
+  return hooks;
+}
+
+// ── Step 2: the script, written to the chosen hook ───────────────────────────
+
+export interface GenerateInput {
+  clientId: string;
+  topic: string;
+  contentType: string;
+  pillar: string;
+  length: string;
+  /** The one hook the client picked out of generateHooks' shortlist. */
+  chosenHook: string;
+  additionalContext?: string;
+}
+
+function scriptBrief(input: Omit<GenerateInput, "clientId">): string {
+  return [
+    "Now write ONE script with these parameters. Follow the FORMAT-SPECIFIC OUTPUT rules for the content type exactly.",
+    "",
+    ...briefBlock(input),
+    "",
+    "THE HOOK IS ALREADY CHOSEN. The client picked this line, so the script is written to its angle:",
+    input.chosenHook.trim(),
+    "",
+    "Open on that hook. Use it as the HOOK beat close to word for word, tightening it only if it does not scan out loud. Do not swap it for a different angle, and do not write a second hook in front of it. BUILD, DELIVER and CLOSE all have to pay off the promise this line makes.",
+    "",
+    `- Target length: ${input.length}`,
+  ].join("\n");
 }
 
 /** Generate a new script and save it to the shared `scripts` table (status 'drafted'). */
 export async function generateScript(input: GenerateInput): Promise<ScriptRow> {
   await authorize(input.clientId);
   if (!input.topic.trim()) throw new Error("Add a topic first.");
+  if (!input.chosenHook.trim()) throw new Error("Pick a hook first.");
 
   const db = createAdminClient();
   const context = await buildClientContext(db, input.clientId);
-  const userMessage = `${context}\n\n---\n\n${briefLine(input)}`;
+  const userMessage = `${context}\n\n---\n\n${scriptBrief(input)}`;
 
   const script = await callClaude(SCRIPT_GENERATOR, userMessage);
 
+  // hook_type and audience_stage are legacy Cleo columns whose selectors were
+  // removed from the form. Written null rather than a made-up value so new rows
+  // are honestly blank instead of pretending the client chose something.
   const { data, error } = await db
     .from("scripts")
     .insert({
       user_id: input.clientId,
       topic: input.topic.trim(),
       content_type: input.contentType,
-      hook_type: input.hookType,
+      hook_type: null,
       pillar: input.pillar,
-      audience_stage: input.audienceStage,
+      audience_stage: null,
       length: input.length,
       additional_context: input.additionalContext?.trim() || null,
       generated_script: script,
@@ -212,7 +269,7 @@ export async function refineScript(input: RefineInput): Promise<ScriptRow> {
     prev.generated_script ?? "",
     '"""',
     "",
-    "Revise it based on this note. Keep the same content type and its format-specific output rules exactly. Output only the revised script, no preamble.",
+    "Revise it based on this note. Keep the same content type and its format-specific output rules exactly. Keep the hook's angle unless the note asks you to change it. Output only the revised script, no preamble.",
     "",
     `Refinement note: ${input.refinement.trim()}`,
   ].join("\n");
