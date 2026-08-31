@@ -11,11 +11,14 @@
 // creators that belong to OTHER clients. This harness proves the Rumi-side
 // ownership guard in competitor.ts:claimPipelineVideos makes cross-tenant video
 // OWNERSHIP impossible: a run/claim by tenant A never pulls a video whose creator
-// is owned exclusively by tenant B, and vice-versa. Shared/legacy-creator videos
-// (creators.client_id NULL) stay claimable by whoever claims first.
+// is owned exclusively by tenant B, and vice-versa. Shared-creator videos
+// (creators.client_id = the 0015 sentinel) stay claimable by whoever claims
+// first — the sentinel is exempted from the block list precisely so that a
+// scrape of a shared creator does not become unclaimable, and therefore
+// (since 0015 hides unclaimed rows) invisible to everyone forever.
 //
 // Scenario — two disposable tenants, each owning one creator, plus one shared
-// (NULL) creator. We seed NULL-tagged videos for ALL THREE creators under the
+// (sentinel) creator. We seed NULL-tagged videos for ALL THREE creators under the
 // same configName + day (mimicking SMAI's over-broad scrape), then:
 //   1. Tenant A claims  → gets its own creator's video + the shared one; NEVER B's.
 //   2. Tenant B claims  → gets its own creator's video only (shared already taken).
@@ -56,6 +59,8 @@ const VID = {
   shared: "e2e-ti-vid-s",  // creator ti_legacy_shared → first claimer
 };
 const SHARED_CREATOR_ID = "e2e-ti-cre-shared";
+// Owner id of the shared set since migration 0015 (was NULL before it).
+const SHARED_ID = "00000000-0000-0000-0000-000000000000";
 
 const PROTECTED = new Set([
   "e19354ba-0988-4721-8fe2-d4ae983d8b9f",
@@ -136,6 +141,8 @@ async function runLive() {
   await teardown({ quiet: true });
   const results: Record<string, boolean> = {};
 
+  // Unclaimed (NULL) video baseline — normally 0 now that 0015 moved the old
+  // shared rows onto the sentinel. Must return to this exact number at the end.
   const baseLegacy = (await seed.from("videos").select("id", { count: "exact", head: true }).is("client_id", null)).count ?? 0;
 
   try {
@@ -147,7 +154,7 @@ async function runLive() {
     await createCreator(idA, `@${TENANTS[0].creator}`, "cat");
     await createCreator(idB, `@${TENANTS[1].creator}`, "cat");
     const insCre = await seed.from("creators").insert({
-      id: SHARED_CREATOR_ID, client_id: null, username: SHARED_CREATOR, category: "cat",
+      id: SHARED_CREATOR_ID, client_id: SHARED_ID, username: SHARED_CREATOR, category: "cat",
       profilePicUrl: "", followers: 0, reelsCount30d: 0, avgViews30d: 0, lastScrapedAt: "",
     });
     if (insCre.error) throw new Error(`shared creator seed failed: ${insCre.error.message}`);

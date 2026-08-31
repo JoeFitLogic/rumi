@@ -2,16 +2,27 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Video, Creator, CompetitorConfig, ConfigInput } from "./types";
+// Aliased, not relative: the node-run e2e harnesses resolve "@/..." through
+// scripts/_alias-hooks.mjs, which probes the .ts extension. A relative value
+// import would need the extension spelled out and breaks those harnesses.
+import { SHARED_CLIENT_ID } from "@/lib/research/types";
+import type { Video, Creator, CompetitorConfig, ConfigInput } from "@/lib/research/types";
 
-// Server-side data layer for the per-client competitor tables (migration 0012).
+// Server-side data layer for the per-client competitor tables (migrations 0012,
+// 0015).
 //
 // Ownership model:
-//   * READS  → this client's rows (client_id = clientId) PLUS legacy/global rows
-//              (client_id IS NULL, the pre-existing Cleo data). Both shown.
+//   * READS  → this client's rows (client_id = clientId) PLUS the shared set
+//              (client_id = SHARED_CLIENT_ID, the pre-Rumi Cleo data). Both shown.
 //   * WRITES → this client's OWN rows only (client_id = clientId AND id = ...).
-//              Legacy NULL rows and other clients' rows are never mutated. This
-//              is enforced on the query, so a service-role write can't stray.
+//              Shared rows and other clients' rows are never mutated. This is
+//              enforced on the query, so a service-role write can't stray.
+//
+// NULL is NOT readable. A scrape writes videos untagged and they only become a
+// client's when claimPipelineVideos tags them, so until that happens the rows
+// belong to nobody and nobody sees them. Before 0015 the read filter treated
+// NULL as shared, which meant an unclaimed scrape (a browser tab closed before
+// the run finished, say) was visible to every client in the system.
 //
 // These tables are anon-unreadable (RLS) and Cleo-shared, so everything here
 // uses the service role. The caller MUST have passed getActiveClient() first
@@ -24,9 +35,9 @@ const CREATOR_COLS =
 const CONFIG_COLS =
   "id, configName, creatorsCategory, analysisInstruction, newConceptsInstruction, client_id";
 
-/** `client_id = clientId OR client_id IS NULL` — own rows + legacy/global. */
+/** `client_id = clientId OR client_id = SHARED` — own rows + the shared set. */
 function ownedOrGlobal(clientId: string): string {
-  return `client_id.eq.${clientId},client_id.is.null`;
+  return `client_id.eq.${clientId},client_id.eq.${SHARED_CLIENT_ID}`;
 }
 
 function toVideo(r: Record<string, unknown>): Video {
@@ -113,8 +124,8 @@ export async function listConfigs(clientId: string): Promise<CompetitorConfig[]>
 
 /**
  * Star / unstar a video the client OWNS. Scoped by `client_id = clientId` so a
- * legacy/global row (client_id NULL) or another client's row can never flip.
- * Returns the number of rows changed (0 = not owned, silently a no-op).
+ * shared row or another client's row can never flip. Returns the number of rows
+ * changed (0 = not owned, silently a no-op).
  */
 export async function setVideoStar(
   clientId: string,
@@ -132,7 +143,7 @@ export async function setVideoStar(
   return data?.length ?? 0;
 }
 
-/** Delete one video the client OWNS (never a legacy/global or other client's). */
+/** Delete one video the client OWNS (never a shared or other client's). */
 export async function deleteVideo(
   clientId: string,
   videoId: string
@@ -150,8 +161,8 @@ export async function deleteVideo(
 
 /**
  * Clear ALL of this client's OWN videos. The `client_id = clientId` filter is
- * mandatory and explicit — it must never widen to legacy/global rows. We refuse
- * to build the query without it.
+ * mandatory and explicit — it must never widen to shared rows. We refuse to
+ * build the query without it.
  */
 export async function clearOwnVideos(clientId: string): Promise<number> {
   if (!clientId) throw new Error("clearOwnVideos requires a clientId.");
@@ -166,10 +177,11 @@ export async function clearOwnVideos(clientId: string): Promise<number> {
 }
 
 // ── Configs (per-client write; Session 9) ─────────────────────────────────────
-// Rumi-direct rather than via SMAI's /api/configs: SMAI writes untagged (NULL,
-// shared) rows with no auth on the route, so round-tripping then tagging would
-// be a racy two-step. A service-role insert with client_id set is atomic and
-// matches the read-side owner-scoping. Legacy/global configs stay read-only.
+// Rumi-direct rather than via SMAI's /api/configs: SMAI writes untagged (NULL)
+// rows with no auth on the route, so round-tripping then tagging would be a racy
+// two-step, and since 0015 an untagged row is invisible until claimed. A
+// service-role insert with client_id set is atomic and matches the read-side
+// owner-scoping. Shared configs stay read-only.
 
 function configRow(input: ConfigInput, clientId: string, id: string) {
   return {
@@ -227,7 +239,7 @@ export async function updateConfig(
   return data?.length ?? 0;
 }
 
-/** Delete a config the client OWNS. Never a legacy/global or other client's. */
+/** Delete a config the client OWNS. Never a shared or other client's. */
 export async function deleteConfig(clientId: string, id: string): Promise<number> {
   const db = createAdminClient();
   const { data, error } = await db
@@ -286,7 +298,7 @@ export async function createCreator(
   };
 }
 
-/** Delete a creator the client OWNS. Never a legacy/global or other client's. */
+/** Delete a creator the client OWNS. Never a shared or other client's. */
 export async function deleteCreator(clientId: string, id: string): Promise<number> {
   const db = createAdminClient();
   const { data, error } = await db
@@ -300,7 +312,7 @@ export async function deleteCreator(clientId: string, id: string): Promise<numbe
 }
 
 /** The ids of creators this client OWNS — used to gate the refresh SSE so it
- *  never re-scrapes (mutates) a legacy/global or another client's creator. */
+ *  never re-scrapes (mutates) a shared or another client's creator. */
 export async function ownedCreatorIds(clientId: string): Promise<Set<string>> {
   const db = createAdminClient();
   const { data, error } = await db
@@ -323,10 +335,13 @@ export async function ownedCreatorIds(clientId: string): Promise<Set<string>> {
  * shared table (it ignores config.creatorsCategory — see reference/smai note), so
  * a run also produces videos for creators that belong to OTHER clients. We must
  * never let this client claim those. So we exclude any candidate whose `creator`
- * username is owned by a different client (a `creators` row with a non-null,
- * different client_id). Legacy/shared creators (client_id NULL) stay claimable by
- * anyone. This makes cross-tenant video OWNERSHIP impossible regardless of what
- * SMAI scrapes. (Fully stopping the over-broad scrape is a SMAI-side fix.)
+ * username is owned by a different client (a `creators` row whose client_id is
+ * set, is not this client, and is not the shared sentinel). Shared creators stay
+ * claimable by whoever claims first, exactly as they were when shared meant NULL
+ * — without that exemption a scrape of a shared creator could never be claimed
+ * by anyone, and since 0015 an unclaimed row is invisible, so it would vanish.
+ * This makes cross-tenant video OWNERSHIP impossible regardless of what SMAI
+ * scrapes. (Fully stopping the over-broad scrape is a SMAI-side fix.)
  *
  * Residual: two runs using the SAME configName on the SAME day could still claim
  * each other's shared/own videos (dateAdded is day-granular). Rare; count returned.
@@ -342,11 +357,13 @@ export async function claimPipelineVideos(
   const db = createAdminClient();
 
   // Usernames owned by OTHER clients — their videos are off-limits to this claim.
+  // The shared sentinel is not an "other client": shared creators stay claimable.
   const { data: otherCre, error: creErr } = await db
     .from("creators")
     .select("username, client_id")
     .not("client_id", "is", null)
-    .neq("client_id", clientId);
+    .neq("client_id", clientId)
+    .neq("client_id", SHARED_CLIENT_ID);
   if (creErr) throw new Error(creErr.message);
   const blocked = new Set(
     (otherCre ?? []).map((r) => String((r as { username: unknown }).username).toLowerCase())

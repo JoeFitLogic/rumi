@@ -47,7 +47,7 @@ import type {
   ConfigInput,
   PipelineProgress,
 } from "@/lib/research/types";
-import { PIPELINE_TERMINAL } from "@/lib/research/types";
+import { PIPELINE_TERMINAL, isSharedRow } from "@/lib/research/types";
 
 type Tab = "videos" | "pipeline" | "creators" | "configs";
 
@@ -171,14 +171,14 @@ function VideosTab({
   const [modal, setModal] = useState<Video | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [pending, start] = useTransition();
-  const ownCount = videos.filter((v) => v.clientId !== null).length;
+  const ownCount = videos.filter((v) => !isSharedRow(v.clientId)).length;
   // A full scrape lands ~60 videos. Showing them all buried the rest of the
   // step, so the grid opens on the first row and expands on demand.
   const shown = expanded ? videos : videos.slice(0, COLLAPSED_VIDEOS);
   const hidden = videos.length - shown.length;
 
   function toggleStar(v: Video) {
-    if (v.clientId === null) return; // legacy/global — read-only
+    if (isSharedRow(v.clientId)) return; // shared — read-only
     const next = !v.starred;
     onVideosChange(videos.map((x) => (x.id === v.id ? { ...x, starred: next } : x)));
     start(async () => {
@@ -191,7 +191,7 @@ function VideosTab({
   }
 
   function del(v: Video) {
-    if (v.clientId === null) return;
+    if (isSharedRow(v.clientId)) return;
     if (!window.confirm("Delete this video from your board?")) return;
     start(async () => {
       try {
@@ -210,7 +210,7 @@ function VideosTab({
     start(async () => {
       try {
         await clearVideos(clientId);
-        onVideosChange(videos.filter((x) => x.clientId === null));
+        onVideosChange(videos.filter((x) => isSharedRow(x.clientId)));
       } catch {
         /* no-op */
       }
@@ -294,7 +294,7 @@ function VideoCard({
   onStar: () => void;
   onDelete: () => void;
 }) {
-  const isLegacy = video.clientId === null;
+  const isLegacy = isSharedRow(video.clientId);
   return (
     <div
       className={`overflow-hidden rounded-lg border bg-paper transition-colors ${
@@ -459,7 +459,7 @@ function CreatorsTab({ clientId }: { clientId: string }) {
     };
   }, [clientId]);
 
-  const ownedIds = (creators ?? []).filter((c) => c.clientId !== null).map((c) => c.id);
+  const ownedIds = (creators ?? []).filter((c) => !isSharedRow(c.clientId)).map((c) => c.id);
 
   function add() {
     if (!username.trim()) return;
@@ -477,7 +477,7 @@ function CreatorsTab({ clientId }: { clientId: string }) {
   }
 
   function del(c: Creator) {
-    if (c.clientId === null) return;
+    if (isSharedRow(c.clientId)) return;
     if (!window.confirm(`Remove @${c.username}?`)) return;
     startAdd(async () => {
       try {
@@ -611,7 +611,7 @@ function CreatorsTab({ clientId }: { clientId: string }) {
                 <tr key={c.id} className="border-b border-line/60">
                   <td className="py-2.5 pr-3">
                     <span className="font-medium text-ink">@{c.username}</span>
-                    {c.clientId === null && (
+                    {isSharedRow(c.clientId) && (
                       <span className="ml-2 rounded bg-cream px-1.5 py-0.5 text-[9px] uppercase text-ink-soft">
                         shared
                       </span>
@@ -621,7 +621,7 @@ function CreatorsTab({ clientId }: { clientId: string }) {
                   <td className="py-2.5 pr-3 text-ink-soft">{fmt(c.reelsCount30d)}</td>
                   <td className="py-2.5 pr-3 text-ink-soft">{fmt(c.avgViews30d)}</td>
                   <td className="py-2.5 text-right">
-                    {c.clientId !== null && (
+                    {!isSharedRow(c.clientId) && (
                       <button
                         onClick={() => del(c)}
                         className="rounded p-1 text-ink-soft transition-colors hover:bg-red-50 hover:text-red-600"
@@ -744,7 +744,7 @@ function ConfigCard({
   onDelete: () => void;
 }) {
   const [pending, start] = useTransition();
-  const isLegacy = c.clientId === null;
+  const isLegacy = isSharedRow(c.clientId);
   return (
     <div className="card">
       <div className="flex items-center justify-between gap-2">
@@ -1015,7 +1015,7 @@ function RunPipelineTab({
                   {(configs ?? []).map((c) => (
                     <option key={c.id} value={c.configName}>
                       {c.configName}
-                      {c.clientId === null ? " (shared)" : ""}
+                      {isSharedRow(c.clientId) ? " (shared)" : ""}
                     </option>
                   ))}
                 </select>

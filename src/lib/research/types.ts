@@ -46,8 +46,36 @@ export const EMPTY_NOTES: ResearchNotes = {
 
 // ── Competitor research (Step 3 area) ────────────────────────────────────────
 // These mirror the Cleo-shared `videos` / `creators` / `configs` tables (camelCase
-// columns), plus the `client_id` added in migration 0012. `clientId === null`
-// means a legacy/global (Cleo) row — visible to every client, read-only in Rumi.
+// columns), plus the `client_id` added in migration 0012.
+//
+// OWNERSHIP (migration 0015). `client_id` has exactly three meanings:
+//   * SHARED_CLIENT_ID → the original Cleo rows. Visible to every client,
+//     read-only in Rumi.
+//   * a client's uuid  → that client's own row. Visible and writable only to
+//     them.
+//   * NULL             → written by a scrape, not yet claimed. Visible to
+//     NOBODY until claimPipelineVideos tags it.
+//
+// Before 0015, NULL carried the first and third meanings at once and the read
+// filter included it, so an unclaimed scrape was readable by every client.
+
+/**
+ * Owner id for rows shared with every client (the pre-Rumi Cleo data).
+ *
+ * A sentinel rather than NULL so that "shared with everyone" and "nobody has
+ * claimed this yet" cannot be confused by a query. Not a real profile id, which
+ * is fine: migration 0012 deliberately put no FK on this column.
+ */
+export const SHARED_CLIENT_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * True when a row belongs to no single client, so the UI must render it
+ * read-only. Covers the shared set and, defensively, an unclaimed row: reads
+ * never return those, but neither is the viewer's to mutate.
+ */
+export function isSharedRow(clientId: string | null): boolean {
+  return clientId === null || clientId === SHARED_CLIENT_ID;
+}
 
 export interface Video {
   id: string;

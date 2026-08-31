@@ -115,11 +115,15 @@ async function ensureAccount(): Promise<string> {
   return user.id;
 }
 
-async function legacyCount(): Promise<number> {
+// Shared rows carry the 0015 sentinel, not NULL. NULL now means "scraped but
+// unclaimed", which no client can read.
+const SHARED = "00000000-0000-0000-0000-000000000000";
+
+async function sharedCount(): Promise<number> {
   const { count } = await seed
     .from("videos")
     .select("id", { count: "exact", head: true })
-    .is("client_id", null);
+    .eq("client_id", SHARED);
   return count ?? 0;
 }
 
@@ -129,12 +133,12 @@ async function runLive() {
 
   const results: Record<string, boolean> = {};
   let clientId: string;
-  const baselineLegacy = await legacyCount();
+  const baselineLegacy = await sharedCount();
 
-  // Pick a real legacy (NULL) video to prove it's read-visible but write-protected.
+  // Pick a real shared video to prove it's read-visible but write-protected.
   const { data: legacyRow } = await seed
-    .from("videos").select("id, starred").is("client_id", null).limit(1).maybeSingle();
-  if (!legacyRow) throw new Error("no legacy (NULL client_id) video to test against.");
+    .from("videos").select("id, starred").eq("client_id", SHARED).limit(1).maybeSingle();
+  if (!legacyRow) throw new Error("no shared video to test against (run sql/0015?).");
   const legacyId = String(legacyRow.id);
   const legacyStarredBefore = legacyRow.starred === true;
 
@@ -183,12 +187,12 @@ async function runLive() {
     results.clearScope = cleared === 2 && noOwnLeft && bStillThere;
     console.log(`4) clearOwnVideos      : cleared ${cleared} (2) · own gone ${noOwnLeft ? "✓" : "✗"} · other survives ${bStillThere ? "✓" : "✗"} ${results.clearScope ? "✓" : "✗"}`);
 
-    // 5) LEGACY UNTOUCHED — the real row's starred flag + total legacy count unchanged
+    // 5) SHARED UNTOUCHED — the real row's starred flag + total shared count unchanged
     const { data: legacyAfter } = await seed.from("videos").select("starred").eq("id", legacyId).maybeSingle();
     const legacyStarredAfter = legacyAfter?.starred === true;
-    const legacyNow = await legacyCount();
+    const legacyNow = await sharedCount();
     results.legacySafe = legacyStarredAfter === legacyStarredBefore && legacyNow === baselineLegacy;
-    console.log(`5) legacy untouched    : starred ${legacyStarredBefore}→${legacyStarredAfter} · count ${baselineLegacy}→${legacyNow} ${results.legacySafe ? "✓" : "✗"}`);
+    console.log(`5) shared untouched    : starred ${legacyStarredBefore}→${legacyStarredAfter} · count ${baselineLegacy}→${legacyNow} ${results.legacySafe ? "✓" : "✗"}`);
   } catch (err) {
     console.error("FATAL:", (err as Error).message);
     await teardown({ quiet: true }).catch(() => {});

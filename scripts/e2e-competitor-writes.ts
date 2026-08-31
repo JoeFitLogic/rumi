@@ -130,11 +130,14 @@ async function runLive() {
   const results: Record<string, boolean> = {};
   let clientId: string;
 
-  // Legacy (NULL) config + creator to prove write-protection.
-  const { data: legCfg } = await seed.from("configs").select("id").is("client_id", null).limit(1).maybeSingle();
-  const { data: legCre } = await seed.from("creators").select("id").is("client_id", null).limit(1).maybeSingle();
+  // Shared config + creator to prove write-protection. Since 0015 the shared set
+  // carries the sentinel, not NULL; NULL now means "scraped but unclaimed".
+  const SHARED = "00000000-0000-0000-0000-000000000000";
+  const { data: legCfg } = await seed.from("configs").select("id").eq("client_id", SHARED).limit(1).maybeSingle();
+  const { data: legCre } = await seed.from("creators").select("id").eq("client_id", SHARED).limit(1).maybeSingle();
   const legacyConfigId = legCfg ? String(legCfg.id) : null;
   const legacyCreatorId = legCre ? String(legCre.id) : null;
+  // Unclaimed (NULL) baseline — normally 0 now that the old shared rows moved.
   const baseLegacyVideos = (await seed.from("videos").select("id", { count: "exact", head: true }).is("client_id", null)).count ?? 0;
 
   try {
@@ -189,11 +192,11 @@ async function runLive() {
     results.claim = claimed === 2 && c0 === clientId && c1 === clientId && c2 === "null" && c3 === "null" && c4 === OTHER;
     console.log(`4) pipeline claim      : claimed ${claimed} (2) · today→${c0===clientId&&c1===clientId?"me ✓":"✗"} · old ${c2==="null"?"skipped ✓":"✗"} · wrong-cfg ${c3==="null"?"skipped ✓":"✗"} · other ${c4===OTHER?"kept ✓":"✗"} ${results.claim?"✓":"✗"}`);
 
-    // ── Legacy videos untouched ──
+    // ── Unclaimed videos untouched ──
     const nowLegacy = (await seed.from("videos").select("id", { count: "exact", head: true }).is("client_id", null)).count ?? 0;
     // Our old-day + wrong-cfg NULL seeds (2) are still NULL, so expected = base + 2.
     results.legacySafe = nowLegacy === baseLegacyVideos + 2;
-    console.log(`5) legacy videos       : NULL count ${baseLegacyVideos}→${nowLegacy} (expect +2 from our NULL seeds) ${results.legacySafe?"✓":"✗"}`);
+    console.log(`5) unclaimed videos    : NULL count ${baseLegacyVideos}→${nowLegacy} (expect +2 from our NULL seeds) ${results.legacySafe?"✓":"✗"}`);
   } catch (err) {
     console.error("FATAL:", (err as Error).message);
     await teardown({ quiet: true }).catch(() => {});
