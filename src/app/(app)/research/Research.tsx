@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Instagram, Lock } from "lucide-react";
 import { StepIntro, NotesTextarea } from "./researchUi";
 import StepInteractions from "./StepInteractions";
-import StepForums from "./StepForums";
 import StepIdeation from "./StepIdeation";
 import CompetitorResearch from "./CompetitorResearch";
 import { listCompetitorVideos } from "./actions";
@@ -145,16 +144,14 @@ export default function Research({ clientId }: { clientId: string }) {
   const done: Record<StepKey, boolean> = {
     analytics: notes.analytics.trim().length > 0,
     interactions: notes.clients.trim().length > 0,
-    competitors:
-      notes.forums.trim().length > 0 ||
-      notes.trends.trim().length > 0 ||
-      selectedVideoIds.size > 0,
+    competitors: selectedVideoIds.size > 0,
     ideation: ideas.length > 0,
   };
 
   const hasResearch =
     done.analytics ||
     done.interactions ||
+    done.competitors ||
     notes.forums.trim().length > 0 ||
     notes.trends.trim().length > 0;
 
@@ -183,10 +180,9 @@ export default function Research({ clientId }: { clientId: string }) {
           <StepIntro
             eyebrow="Step 3 · Competitor research"
             title="Steal what's already working"
-            description="Study the reels landing in your niche, then listen in on what your audience says when you're not in the room. Select videos and quotes here to feed them into ideation."
+            description="Study the reels landing in your niche. Select the ones worth learning from to feed them into ideation."
           />
 
-          {/* Competitor machinery first — videos, pipeline, creators, configs. */}
           <CompetitorResearch
             clientId={clientId}
             videos={videos}
@@ -194,18 +190,6 @@ export default function Research({ clientId }: { clientId: string }) {
             onToggleSelect={toggleVideo}
             onVideosChange={setVideos}
           />
-
-          {/* Then the forums / Reddit listening, in the same step. */}
-          <div className="border-t border-line pt-8">
-            <StepForums
-              clientId={clientId}
-              forumsNotes={notes.forums}
-              onForumsChange={(v) => setNote("forums", v)}
-              onAppendForums={(t) => appendNote("forums", t)}
-              trendsNotes={notes.trends}
-              onTrendsChange={(v) => setNote("trends", v)}
-            />
-          </div>
         </div>
       )}
 

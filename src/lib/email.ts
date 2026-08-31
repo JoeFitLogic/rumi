@@ -61,10 +61,10 @@ export async function sendStrategyReleasedEmail(opts: {
   const { error } = await resend.emails.send({
     from: FROM,
     to: opts.to,
-    subject: "Niamh has finished building your strategy",
+    subject: "Alex and Niamh have finished building your strategy",
     html: shell(
       `<p>Hi ${first},</p>
-       <p>Niamh has finished building your personal brand strategy. It's ready and waiting for you inside Rumi.</p>
+       <p>Alex and Niamh have finished building your personal brand strategy. It's ready and waiting for you inside Rumi.</p>
        <p>Take your time with it, read it in full without distractions, and start with the first action in section one.</p>
        ${button(opts.link, "Read your strategy")}`
     ),

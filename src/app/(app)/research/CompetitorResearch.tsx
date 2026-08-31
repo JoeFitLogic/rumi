@@ -13,7 +13,6 @@ import {
   Users,
   Settings2,
   Flame,
-  Hash,
   Film,
   RefreshCw,
   Plus,
@@ -21,9 +20,10 @@ import {
   Pencil,
   Check,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Markdown from "@/components/Markdown";
-import { SectionHeading } from "./researchUi";
 import { deriveInsights } from "@/lib/research/insights";
 import {
   listCompetitorCreators,
@@ -76,11 +76,6 @@ export default function CompetitorResearch({
 
   return (
     <div className="space-y-6">
-      <SectionHeading
-        title="Competitor videos"
-        description="Study the reels landing in your niche, then let the hooks, topics and formats sharpen your own ideas. Select videos here to feed them into ideation."
-      />
-
       <Insights insights={insights} />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -121,7 +116,7 @@ export default function CompetitorResearch({
   );
 }
 
-// ── Derived insights (hooks / topics / formats) ──────────────────────────────
+// ── Derived insights ─────────────────────────────────────────────────────────
 function Insights({ insights }: { insights: ReturnType<typeof deriveInsights> }) {
   if (insights.videoCount === 0) {
     return (
@@ -131,70 +126,33 @@ function Insights({ insights }: { insights: ReturnType<typeof deriveInsights> })
     );
   }
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <div className="card">
-        <h3 className="flex items-center gap-2 font-display text-base text-ink">
-          <Flame size={16} strokeWidth={1.75} className="text-gold" /> Hooks worth stealing
-        </h3>
-        {insights.hooks.length === 0 ? (
-          <p className="mt-3 text-xs text-ink-soft">No clear hooks detected yet.</p>
-        ) : (
-          <ul className="mt-3 space-y-2.5">
-            {insights.hooks.map((h, i) => (
-              <li key={i} className="border-l-2 border-gold pl-3 text-sm text-ink">
-                &ldquo;{h.text}&rdquo;
-                {h.creator && (
-                  <span className="mt-0.5 block text-[11px] text-ink-soft">
-                    @{h.creator}
-                    {typeof h.views === "number" ? ` · ${fmt(h.views)} views` : ""}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="card">
-        <h3 className="flex items-center gap-2 font-display text-base text-ink">
-          <Hash size={16} strokeWidth={1.75} className="text-gold" /> Most common topics
-        </h3>
-        {insights.topics.length === 0 ? (
-          <p className="mt-3 text-xs text-ink-soft">Not enough analysed videos yet.</p>
-        ) : (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {insights.topics.map((t) => (
-              <span
-                key={t.label}
-                className="rounded-full bg-cream px-2.5 py-1 text-xs text-ink"
-              >
-                {t.label} <span className="text-ink-soft">×{t.count}</span>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <h3 className="flex items-center gap-2 font-display text-base text-ink">
-          <Film size={16} strokeWidth={1.75} className="text-gold" /> Most used formats
-        </h3>
-        {insights.formats.length === 0 ? (
-          <p className="mt-3 text-xs text-ink-soft">No formats detected yet.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {insights.formats.map((f) => (
-              <li key={f.label} className="flex items-center justify-between text-sm">
-                <span className="text-ink">{f.label}</span>
-                <span className="text-ink-soft">×{f.count}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <div className="card">
+      <h3 className="flex items-center gap-2 font-display text-base text-ink">
+        <Flame size={16} strokeWidth={1.75} className="text-gold" /> Most applicable videos
+      </h3>
+      {insights.hooks.length === 0 ? (
+        <p className="mt-3 text-xs text-ink-soft">No clear hooks detected yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-2.5">
+          {insights.hooks.map((h, i) => (
+            <li key={i} className="border-l-2 border-gold pl-3 text-sm text-ink">
+              &ldquo;{h.text}&rdquo;
+              {h.creator && (
+                <span className="mt-0.5 block text-[11px] text-ink-soft">
+                  @{h.creator}
+                  {typeof h.views === "number" ? ` · ${fmt(h.views)} views` : ""}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
+
+// How many videos the grid shows before "show more".
+const COLLAPSED_VIDEOS = 3;
 
 // ── Videos tab ────────────────────────────────────────────────────────────────
 function VideosTab({
@@ -211,8 +169,13 @@ function VideosTab({
   onVideosChange: (videos: Video[]) => void;
 }) {
   const [modal, setModal] = useState<Video | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [pending, start] = useTransition();
   const ownCount = videos.filter((v) => v.clientId !== null).length;
+  // A full scrape lands ~60 videos. Showing them all buried the rest of the
+  // step, so the grid opens on the first row and expands on demand.
+  const shown = expanded ? videos : videos.slice(0, COLLAPSED_VIDEOS);
+  const hidden = videos.length - shown.length;
 
   function toggleStar(v: Video) {
     if (v.clientId === null) return; // legacy/global — read-only
@@ -279,8 +242,8 @@ function VideosTab({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {videos.map((v) => (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {shown.map((v) => (
           <VideoCard
             key={v.id}
             video={v}
@@ -292,6 +255,24 @@ function VideosTab({
           />
         ))}
       </div>
+
+      {videos.length > COLLAPSED_VIDEOS && (
+        <button
+          onClick={() => setExpanded((x) => !x)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-paper py-2.5 text-sm text-ink-soft transition-colors hover:border-gold/50 hover:text-ink"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp size={15} strokeWidth={1.75} /> Show fewer
+            </>
+          ) : (
+            <>
+              <ChevronDown size={15} strokeWidth={1.75} /> Show {hidden} more video
+              {hidden === 1 ? "" : "s"}
+            </>
+          )}
+        </button>
+      )}
 
       {modal && <VideoModal video={modal} onClose={() => setModal(null)} />}
     </div>
@@ -341,9 +322,9 @@ function VideoCard({
         )}
       </button>
 
-      <div className="space-y-2 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-medium text-ink">
+      <div className="space-y-1.5 p-2.5">
+        <div className="flex items-center justify-between gap-1.5">
+          <p className="truncate text-xs font-medium text-ink">
             @{video.creator ?? "unknown"}
           </p>
           {isLegacy && (
@@ -352,25 +333,25 @@ function VideoCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-ink-soft">
-          <span className="inline-flex items-center gap-1">
-            <Eye size={12} /> {fmt(video.views)}
+        <div className="flex items-center gap-2 text-[10px] text-ink-soft">
+          <span className="inline-flex items-center gap-0.5">
+            <Eye size={11} /> {fmt(video.views)}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Heart size={12} /> {fmt(video.likes)}
+          <span className="inline-flex items-center gap-0.5">
+            <Heart size={11} /> {fmt(video.likes)}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <MessageSquare size={12} /> {fmt(video.comments)}
+          <span className="inline-flex items-center gap-0.5">
+            <MessageSquare size={11} /> {fmt(video.comments)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink">
+        <div className="flex items-center justify-between gap-1 pt-0.5">
+          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink">
             <input
               type="checkbox"
               checked={selected}
               onChange={onToggleSelect}
-              className="h-3.5 w-3.5 accent-[color:var(--gold,#ab8115)]"
+              className="h-3 w-3 accent-[color:var(--gold,#ab8115)]"
             />
             Use in ideation
           </label>
@@ -381,7 +362,7 @@ function VideoCard({
               title={isLegacy ? "Shared videos can't be starred" : "Star"}
               className="rounded p-1 text-ink-soft transition-colors hover:bg-gold-tint/40 hover:text-gold-deep disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <Star size={14} strokeWidth={1.75} fill={video.starred ? "currentColor" : "none"} />
+              <Star size={13} strokeWidth={1.75} fill={video.starred ? "currentColor" : "none"} />
             </button>
             <button
               onClick={onDelete}
@@ -389,7 +370,7 @@ function VideoCard({
               title={isLegacy ? "Shared videos can't be deleted" : "Delete"}
               className="rounded p-1 text-ink-soft transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <Trash2 size={14} strokeWidth={1.75} />
+              <Trash2 size={13} strokeWidth={1.75} />
             </button>
           </div>
         </div>

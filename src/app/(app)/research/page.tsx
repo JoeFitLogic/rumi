@@ -5,8 +5,10 @@ import Research from "./Research";
 
 // Research — the 4-step flow that replaces Cleo's Ideation tab:
 //   1. Your analytics   2. Client interactions (+ transcript analyser)
-//   3. Competitor research (competitor videos/pipeline/creators/configs, then
-//      the forums + Reddit scraper)   4. Ideation
+//   3. Competitor research (competitor videos/pipeline/creators/configs)
+//   4. Ideation
+// The forums + Reddit scraper panel (StepForums) was removed from the tab on
+// client feedback. The component and its server actions are still here, unused.
 // Scoped to the active client via getActiveClient() + the admin ?as= switcher.
 // Per-client progress is persisted in localStorage, keyed by activeClientId.
 export default async function ResearchPage({

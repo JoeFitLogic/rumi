@@ -68,7 +68,7 @@ export default async function StrategyPage({
           <Info
             icon={<ClipboardList size={18} strokeWidth={1.75} />}
             title="Your strategy starts with onboarding"
-            body="Before Niamh can build your personal brand strategy, she needs to hear about you, your audience, and your goals. Complete your onboarding and she'll take it from there."
+            body="Before Alex and Niamh can build your personal brand strategy, they need to hear about you, your audience, and your goals. Complete your onboarding and they'll take it from there."
           />
         )}
       </Shell>
@@ -153,12 +153,12 @@ export default async function StrategyPage({
       <div className="card border-gold/30 bg-gold-tint/30">
         <p className="eyebrow mb-2">In progress</p>
         <h2 className="font-display text-2xl text-ink">
-          Niamh is building your strategy
+          Alex and Niamh are building your strategy
         </h2>
         <p className="mt-3 max-w-md text-sm text-ink-soft">
-          She&apos;s putting together your personal brand and growth strategy
-          from your onboarding answers. It&apos;ll land here the moment it&apos;s
-          ready, and you&apos;ll get an email to let you know.
+          They&apos;re putting together your personal brand and growth
+          strategy from your onboarding answers. It&apos;ll land here the moment
+          it&apos;s ready, and you&apos;ll get an email to let you know.
         </p>
       </div>
     </Shell>
@@ -192,7 +192,7 @@ function Shell({
         description={
           wide
             ? undefined
-            : "Your 12-section personal brand strategy, built from your onboarding answers."
+            : "Your 12-section personal brand strategy, built by Alex and Niamh from your onboarding answers."
         }
       />
       {children}
