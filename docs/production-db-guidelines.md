@@ -48,11 +48,34 @@ today**:
 | `strategy_sections` | `user_id` | Denormalized `user_id`. |
 | `content_ideas` | `client_id` | Owner column is `client_id`, **not** `user_id`. |
 | `scripts` | `user_id` | |
-| `videos`, `creators`, `configs` | `user_id = NULL` on every row | **Global** Cleo research/competitor data. No per-user ownership. `configs` currently has **RLS disabled**. |
+| `videos`, `creators`, `configs` | `client_id` (Rumi); `user_id = NULL` on every row | **SMAI's** competitor tables, **not Cleo's** — Cleo never queries them (it uses `competitor_media` / `competitor_accounts`). Verified against `reference/alex-cleo`. Owned per-client by Rumi since `0012`; see the ownership note below. `configs` currently has **RLS disabled**. |
 
 Rumi's own tables (safe to change freely, within reason): `checkin_responses`,
 `checkin_analysis`, and the `linked_user_id` / `account_status` columns added to
 `profiles`.
+
+### Competitor row ownership (`videos` / `creators` / `configs`)
+
+`client_id` was added by `sql/0012` and means one of three things. Read it
+carefully before writing a query against these tables:
+
+| `client_id` | Meaning | Who can read it |
+|---|---|---|
+| a client's uuid | that client's own row | that client (and an admin via `?as=`) |
+| `NULL` | scraped by the pipeline, **not yet claimed** | **nobody** |
+| `00000000-0000-0000-0000-000000000000` | the shared set | every client |
+
+`sql/0015` introduced the sentinel so that `NULL` could mean exactly one thing.
+Before it, `NULL` meant both "shared on purpose" and "not yet claimed", and the
+read filter included `NULL`, so an unclaimed scrape was visible to every client.
+
+`sql/0016` then reassigned the whole shared set to Joe's profile, so **the
+shared set is currently empty** — every client starts with a clean board and
+sees only what they have claimed. The sentinel still works if anything is
+deliberately shared again.
+
+Use `SHARED_CLIENT_ID` / `isSharedRow()` from `src/lib/research/types.ts`. Never
+test for shared-ness with a raw `=== null`.
 
 **Guardrails:**
 
@@ -62,12 +85,15 @@ Rumi's own tables (safe to change freely, within reason): `checkin_responses`,
   admins/VAs never narrows what a client could already read.
 - Never add a per-user own-row policy to `videos`, `creators`, or `configs`.
   Their `user_id` is `NULL`, so an own-row filter would hide **every** row and
-  break Cleo's research reads. This is deliberate — see the excluded-tables note
-  in `sql/0003_admin_rls.sql`.
+  break **SMAI's** reads — `getVideos()` in `reference/smai/app/src/lib/db.ts`
+  selects the whole table with no owner filter. This is deliberate — see the
+  excluded-tables note in `sql/0003_admin_rls.sql`. Rumi scopes these tables in
+  the query instead, via the service role (`src/lib/research/competitor.ts`).
 - `configs` has RLS **disabled** today (anon can read its single global row). Do
   not simply enable RLS with an own-row policy. If you must enable it, use the
   commented block at the foot of `sql/0003_admin_rls.sql` and decide first
-  *how* Cleo reads it (service role vs. anon vs. authenticated).
+  *how* SMAI reads it (service role vs. anon vs. authenticated) — SMAI uses the
+  anon key.
 
 ---
 
