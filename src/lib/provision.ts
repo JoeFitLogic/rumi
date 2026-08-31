@@ -40,7 +40,7 @@ function inviteEmailHtml(name: string, url: string, email: string): string {
     <a href="${url}" style="background:#ab8115;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block">Set your password</a>
   </p>
   <p style="font-size:13px;line-height:1.5;color:#666">If the button doesn't work, paste this link into your browser:<br><span style="word-break:break-all;color:#7a6200">${url}</span></p>
-  <p style="font-size:15px;line-height:1.5;margin-top:24px"><strong>What happens next</strong><br>Niamh is building your personal brand and growth strategy from your answers. It'll appear in Rumi when it's ready, and we'll email you the moment it does.</p>
+  <p style="font-size:15px;line-height:1.5;margin-top:24px"><strong>What happens next</strong><br>Alex and Niamh are building your personal brand and growth strategy from your answers. It'll appear in Rumi when it's ready, and we'll email you the moment it does.</p>
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;background:#f4f1ea;border-radius:8px;width:100%">
     <tr><td style="padding:14px 16px;font-size:13px;line-height:1.6;color:#4a453e">
       <strong style="color:#1a1a1a">Signing in from now on</strong><br>

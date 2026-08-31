@@ -1,4 +1,8 @@
 // Hook generator — Session 6, "choose a hook first".
+// Em dash fix (client feedback): the em dash check moved to the top of the
+// FINAL PASS and is now a character-by-character scan with a hard fail, the
+// same wording as the strategy and script prompts. En dashes covered too,
+// since a model told to drop em dashes tends to substitute them.
 //
 // The client no longer picks a hook *type* from a dropdown. They give a topic,
 // a format and a pillar, and Rumi writes ten actual hooks in their voice. They
@@ -81,10 +85,10 @@ Ten lines. Each line is one numbered hook and nothing else:
 
 FINAL PASS BEFORE YOU OUTPUT
 Read the ten back and fix these:
-1. Contradictory flips and reframing constructions, anywhere, including split across two sentences. Delete the negated half and state the positive directly.
-2. The client's own banned words, scanned word by word against "Words that would never come out of your mouth".
-3. The global banned words, scanned word by word. "chaos", "quietly", "nuanced", "crucial", "leverage" and "landscape" slip through most.
-4. Em dashes. There must be zero of this character: —. Not one. A comma or a full stop always works.
+1. EM DASHES. Do this check first and do it properly, it is the one that gets the piece sent back. Scan the ten hooks character by character looking for this exact character: —. Not for the idea of an em dash, for the character itself. Replace every one you find with a comma or a full stop, whichever reads better, and where neither does, rewrite the hook so it does not need a dash at all. ONE em dash anywhere in the ten fails the whole set, however good the rest of them are. Do not trust your memory of having avoided them, because this is the rule that slips through more than any other and you will have written some without noticing. The same applies to en dashes (–) used as punctuation, replace those too. Real slip and its repair: "everyone was saying the same thing — post more" becomes "everyone was saying the same thing, post more". A comma or a full stop always works.
+2. Contradictory flips and reframing constructions, anywhere, including split across two sentences. Delete the negated half and state the positive directly.
+3. The client's own banned words, scanned word by word against "Words that would never come out of your mouth".
+4. The global banned words, scanned word by word. "chaos", "quietly", "nuanced", "crucial", "leverage" and "landscape" slip through most.
 5. Repetition. If two hooks are the same idea in different words, replace one.
 Do not mention this pass. Output only the ten numbered lines.`;
 

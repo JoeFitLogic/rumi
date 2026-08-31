@@ -2,7 +2,11 @@ import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
   project: "proj_fimjpviuifzyvptvzmqn",
-  runtime: "node",
+  // node-22 (not "node", which is Node 20): the Supabase client pulls in
+  // realtime-js, whose WebSocket factory requires a global WebSocket — only
+  // present natively from Node 22. Belt and braces with the `transport` stub
+  // in src/trigger/generate-strategy.ts.
+  runtime: "node-22",
   logLevel: "log",
   // The max compute seconds a task is allowed to run. If the task run exceeds this duration, it will be stopped.
   // You can override this on an individual task.
