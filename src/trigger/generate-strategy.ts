@@ -1,6 +1,6 @@
 import { logger, task } from "@trigger.dev/sdk";
+import { adminClient } from "./supabaseAdmin";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
 import { STRATEGY_PART_A } from "../lib/prompts/strategy-part-a";
 import { STRATEGY_PART_B } from "../lib/prompts/strategy-part-b";
 import { buildOnboardingBlock } from "../lib/onboarding";
@@ -25,48 +25,6 @@ export interface GenerateStrategyPayload {
   strategyId: string;
   userId: string;
   onboardingId: string | null;
-}
-
-// Derived from createClient's own signature so we don't deep-import a type out
-// of @supabase/realtime-js (a transitive dep that supabase-js does not re-export).
-type RealtimeTransport = NonNullable<
-  NonNullable<Parameters<typeof createClient>[2]>["realtime"]
->["transport"];
-
-/**
- * A WebSocket constructor that is never actually constructed.
- *
- * supabase-js builds a RealtimeClient eagerly inside createClient, and that
- * constructor resolves a transport up front (RealtimeClient._initializeOptions):
- *
- *   result.transport = options?.transport ?? WebSocketFactory.getWebSocketConstructor()
- *
- * On a runtime with no global WebSocket, getWebSocketConstructor() throws
- * "Node.js detected but native WebSocket not found" — at CLIENT CONSTRUCTION,
- * before a single query runs. That is what broke this task in production.
- *
- * Supplying `transport` short-circuits the `??`, so the factory is never
- * consulted and nothing probes the runtime for a WebSocket. This task only
- * reads and writes rows over HTTP and never opens a channel, so this is never
- * instantiated — it throws loudly if that ever stops being true.
- */
-const NO_REALTIME = class {
-  constructor() {
-    throw new Error(
-      "generate-strategy does not use Supabase realtime — no WebSocket transport is configured."
-    );
-  }
-} as unknown as RealtimeTransport;
-
-function admin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-      realtime: { transport: NO_REALTIME },
-    }
-  );
 }
 
 function textFromMessage(msg: {
@@ -95,13 +53,13 @@ export const generateStrategy = task({
     // 'complete'. A strategy that silently never generates is the worst
     // outcome this task has, so setup now gets the same reporting as
     // generation itself.
-    let dbForCleanup: ReturnType<typeof admin> | undefined;
+    let dbForCleanup: ReturnType<typeof adminClient> | undefined;
     // Falls back to the id so a failure that dies before the row loads still
     // produces an email you can act on.
     let clientName = `the client (strategy ${strategyId})`;
 
     try {
-      const db = admin();
+      const db = adminClient();
       dbForCleanup = db;
 
       // Load the strategy + onboarding + client email.
@@ -196,7 +154,7 @@ export const generateStrategy = task({
       let db = dbForCleanup;
       if (!db) {
         try {
-          db = admin();
+          db = adminClient();
         } catch (clientErr) {
           logger.error("Could not build a Supabase client to report the failure", {
             strategyId,

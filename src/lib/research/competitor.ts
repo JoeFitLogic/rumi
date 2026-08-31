@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // scripts/_alias-hooks.mjs, which probes the .ts extension. A relative value
 // import would need the extension spelled out and breaks those harnesses.
 import { SHARED_CLIENT_ID } from "@/lib/research/types";
+import { claimVideosFor } from "@/lib/research/claim";
 import type { Video, Creator, CompetitorConfig, ConfigInput } from "@/lib/research/types";
 
 // Server-side data layer for the per-client competitor tables (migrations 0012,
@@ -326,70 +327,16 @@ export async function ownedCreatorIds(clientId: string): Promise<Set<string>> {
 // ── Pipeline video claim (per-client tagging; Session 9) ──────────────────────
 
 /**
- * Tag the videos a pipeline run just produced to this client. SMAI writes them
- * untagged (client_id NULL) with a date-granular `dateAdded` (YYYY-MM-DD) and the
- * run's `configName`. We claim: NULL rows whose configName matches AND whose
- * dateAdded is on/after the run's start day.
+ * Tag the videos a pipeline run just produced to this client.
  *
- * CROSS-TENANT GUARD (Session 10): SMAI's pipeline scrapes EVERY creator in the
- * shared table (it ignores config.creatorsCategory — see reference/smai note), so
- * a run also produces videos for creators that belong to OTHER clients. We must
- * never let this client claim those. So we exclude any candidate whose `creator`
- * username is owned by a different client (a `creators` row whose client_id is
- * set, is not this client, and is not the shared sentinel). Shared creators stay
- * claimable by whoever claims first, exactly as they were when shared meant NULL
- * — without that exemption a scrape of a shared creator could never be claimed
- * by anyone, and since 0015 an unclaimed row is invisible, so it would vanish.
- * This makes cross-tenant video OWNERSHIP impossible regardless of what SMAI
- * scrapes. (Fully stopping the over-broad scrape is a SMAI-side fix.)
- *
- * Residual: two runs using the SAME configName on the SAME day could still claim
- * each other's shared/own videos (dateAdded is day-granular). Rare; count returned.
+ * The implementation lives in ./claim.ts so the claim-pipeline-videos Trigger
+ * task can share it: this file is server-only, which a Trigger build cannot
+ * resolve. Same behaviour, same cross-tenant guard, one copy.
  */
 export async function claimPipelineVideos(
   clientId: string,
   sinceDay: string,
   configName: string
 ): Promise<number> {
-  if (!clientId || !configName || !sinceDay) {
-    throw new Error("claimPipelineVideos requires clientId, configName and sinceDay.");
-  }
-  const db = createAdminClient();
-
-  // Usernames owned by OTHER clients — their videos are off-limits to this claim.
-  // The shared sentinel is not an "other client": shared creators stay claimable.
-  const { data: otherCre, error: creErr } = await db
-    .from("creators")
-    .select("username, client_id")
-    .not("client_id", "is", null)
-    .neq("client_id", clientId)
-    .neq("client_id", SHARED_CLIENT_ID);
-  if (creErr) throw new Error(creErr.message);
-  const blocked = new Set(
-    (otherCre ?? []).map((r) => String((r as { username: unknown }).username).toLowerCase())
-  );
-
-  // Candidate rows from this run.
-  const { data: cands, error: candErr } = await db
-    .from("videos")
-    .select("id, creator")
-    .is("client_id", null)
-    .eq("configName", configName)
-    .gte("dateAdded", sinceDay);
-  if (candErr) throw new Error(candErr.message);
-
-  const claimIds = (cands ?? [])
-    .filter((v) => !blocked.has(String((v as { creator: unknown }).creator ?? "").toLowerCase()))
-    .map((v) => String((v as { id: unknown }).id));
-  if (claimIds.length === 0) return 0;
-
-  // Re-assert client_id IS NULL on the update so a concurrent claim can't double-tag.
-  const { data, error } = await db
-    .from("videos")
-    .update({ client_id: clientId })
-    .in("id", claimIds)
-    .is("client_id", null)
-    .select("id");
-  if (error) throw new Error(error.message);
-  return data?.length ?? 0;
+  return claimVideosFor(createAdminClient(), clientId, sinceDay, configName);
 }

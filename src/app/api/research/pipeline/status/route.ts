@@ -1,5 +1,5 @@
 import { getActiveClient } from "@/lib/activeClient";
-import { fetchPipelineRun } from "@/lib/research/smai";
+import { fetchPipelineRun } from "@/lib/research/pipelineStatus";
 
 // Poll a pipeline run's live status/progress. The run's PUBLIC token (returned by
 // startPipeline, scoped read-only to that one run) is what reads Trigger.dev — no

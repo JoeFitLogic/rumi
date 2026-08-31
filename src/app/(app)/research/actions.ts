@@ -38,6 +38,10 @@ import {
   claimPipelineVideos as claimPipelineVideosRow,
 } from "@/lib/research/competitor";
 import { startPipeline as smaiStartPipeline } from "@/lib/research/smai";
+import { tasks } from "@trigger.dev/sdk";
+// Type-only: never import the task INSTANCE into app code — it would pull the
+// whole task bundle into the server action. Triggered by id.
+import type { claimPipelineVideosTask } from "@/trigger/claim-pipeline-videos";
 import {
   TRANSCRIPT_ANALYZER_SYSTEM,
   transcriptAnalyzerUser,
@@ -492,6 +496,29 @@ export async function startPipeline(
   // video, and matches SMAI's day-granular dateAdded.
   const sinceDay = new Date().toISOString().slice(0, 10);
   const { runId, publicToken } = await smaiStartPipeline(params);
+
+  // Arm the server-side claim immediately, so the scrape's videos reach this
+  // client whether or not the browser is still here when it finishes. The tab's
+  // own claim still runs and is instant; both are safe, because the claim only
+  // touches rows that are still unclaimed.
+  //
+  // A failure here must NOT fail the run the client just paid Apify credits for.
+  // The scrape is already going; the worst case is the old behaviour, where the
+  // claim depends on the tab staying open.
+  try {
+    await tasks.trigger<typeof claimPipelineVideosTask>(
+      "claim-pipeline-videos",
+      { clientId, runId, publicToken, sinceDay, configName: params.configName },
+      // Keyed on the run so a double-submit cannot start two watchers.
+      { idempotencyKey: `claim-${runId}` }
+    );
+  } catch (e) {
+    console.error("Could not arm the server-side video claim", {
+      runId,
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+
   return { runId, publicToken, sinceDay, configName: params.configName };
 }
 
