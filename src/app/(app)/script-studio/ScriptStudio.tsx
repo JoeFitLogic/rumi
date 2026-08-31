@@ -37,9 +37,12 @@ import {
   deleteScript,
 } from "./actions";
 import ContentBank from "./ContentBank";
+import Interview from "./Interview";
 import type { ContentIdeaRow } from "@/lib/contentBank";
 
-type View = "ideas" | "scripts";
+// "interview" is the conversational story extractor. It sits ALONGSIDE the
+// form flow, which stays exactly as it was — the form is the quick path.
+type View = "ideas" | "scripts" | "interview";
 
 export default function ScriptStudio({
   clientId,
@@ -100,6 +103,29 @@ export default function ScriptStudio({
           initialIdeas={initialIdeas}
           onWriteScript={writeScriptFrom}
         />
+      ) : view === "interview" ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Interview
+            clientId={clientId}
+            clientFirstName={clientFirstName}
+            hasVoice={hasVoice}
+            onSaved={(row) => {
+              upsert(row);
+              setActiveId(row.id);
+            }}
+          />
+          <Library
+            clientId={clientId}
+            scripts={scripts}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onStatusChanged={(row) => upsert(row)}
+            onDeleted={(id) => {
+              setScripts((prev) => prev.filter((s) => s.id !== id));
+              setActiveId((cur) => (cur === id ? null : cur));
+            }}
+          />
+        </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
@@ -159,9 +185,10 @@ function ViewToggle({
   ideaCount: number;
   scriptCount: number;
 }) {
-  const tabs: { key: View; label: string; count: number }[] = [
+  const tabs: { key: View; label: string; count?: number }[] = [
     { key: "ideas", label: "Content Bank", count: ideaCount },
     { key: "scripts", label: "Script Studio", count: scriptCount },
+    { key: "interview", label: "Interview" },
   ];
   return (
     <div className="inline-flex rounded-lg border border-line bg-cream/50 p-1">
@@ -178,13 +205,15 @@ function ViewToggle({
             }`}
           >
             {t.label}
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                isActive ? "bg-gold-tint text-gold-deep" : "bg-cream text-ink-soft"
-              }`}
-            >
-              {t.count}
-            </span>
+            {typeof t.count === "number" && (
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                  isActive ? "bg-gold-tint text-gold-deep" : "bg-cream text-ink-soft"
+                }`}
+              >
+                {t.count}
+              </span>
+            )}
           </button>
         );
       })}

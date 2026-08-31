@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { getActiveClient } from "@/lib/activeClient";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ONBOARDING_FIELDS, GROUP_ORDER } from "@/lib/onboarding";
+import { buildClientContext } from "@/lib/scriptContext";
 import { SCRIPT_GENERATOR } from "@/lib/prompts/script-generator";
 import { HOOK_GENERATOR, parseHooks } from "@/lib/prompts/hook-generator";
 import {
@@ -47,56 +47,6 @@ function textFromMessage(msg: {
     .map((b) => b.text ?? "")
     .join("")
     .trim();
-}
-
-/**
- * Build the client-context block from their latest onboarding row, INCLUDING
- * the voice sample (voice_transcript) so the script sounds like them. Read with
- * the service role + explicit owner filter — the caller is already authorized
- * for this client, and this dodges the shared-DB RLS ambiguity on `scripts`.
- *
- * Both generation passes (hooks and script) share this, so the ten hooks and
- * the script that follows are written off the exact same voice data.
- */
-async function buildClientContext(
-  db: ReturnType<typeof createAdminClient>,
-  clientId: string
-): Promise<string> {
-  const { data: onboarding } = await db
-    .from("onboarding_responses")
-    .select("*")
-    .eq("user_id", clientId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!onboarding) return "No onboarding answers on file for this client yet.";
-
-  const responses = onboarding as Record<string, unknown>;
-  const parts: string[] = ["Here is everything we know about this client. Write the script in THEIR voice, from these answers up.", ""];
-
-  for (const group of GROUP_ORDER) {
-    const answered = ONBOARDING_FIELDS.filter((f) => f.group === group).filter((f) => {
-      const v = responses[f.column];
-      return v !== null && v !== undefined && String(v).trim().length > 0;
-    });
-    if (answered.length === 0) continue;
-    parts.push(`## ${group}`);
-    for (const f of answered) {
-      parts.push(`${f.label}:`);
-      parts.push(String(responses[f.column]).trim());
-      parts.push("");
-    }
-  }
-
-  const voice = responses.voice_transcript;
-  if (typeof voice === "string" && voice.trim().length > 0) {
-    parts.push("## VOICE SAMPLE (match this exact speaking voice, rhythm and word choice)");
-    parts.push(voice.trim());
-    parts.push("");
-  }
-
-  return parts.join("\n").trim();
 }
 
 async function callClaude(
