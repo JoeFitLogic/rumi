@@ -22,9 +22,20 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  TrendingUp,
 } from "lucide-react";
 import Markdown from "@/components/Markdown";
 import { deriveInsights } from "@/lib/research/insights";
+import {
+  buildBaselines,
+  outlierFor,
+  formatMultiple,
+  sortByOutlier,
+  scoredCount,
+  OUTLIER_THRESHOLD,
+  type Baseline,
+  type Outlier,
+} from "@/lib/research/outliers";
 import {
   listCompetitorCreators,
   listCompetitorConfigs,
@@ -72,11 +83,27 @@ export default function CompetitorResearch({
   onVideosChange: (videos: Video[]) => void;
 }) {
   const [tab, setTab] = useState<Tab>("videos");
+  // Creators live HERE rather than inside CreatorsTab: the outlier baseline is
+  // creators.avgViews30d, so the Videos tab and the insights box need them too,
+  // and a stats refresh has to move every score on the page, not just its own
+  // tab's numbers.
+  const [creators, setCreators] = useState<Creator[] | null>(null);
   const insights = useMemo(() => deriveInsights(videos), [videos]);
+  const baselines = useMemo(() => buildBaselines(creators), [creators]);
+
+  useEffect(() => {
+    let live = true;
+    listCompetitorCreators(clientId)
+      .then((c) => live && setCreators(c))
+      .catch(() => live && setCreators([]));
+    return () => {
+      live = false;
+    };
+  }, [clientId]);
 
   return (
     <div className="space-y-6">
-      <Insights insights={insights} />
+      <Insights insights={insights} videos={videos} baselines={baselines} />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => {
@@ -102,6 +129,7 @@ export default function CompetitorResearch({
         <VideosTab
           clientId={clientId}
           videos={videos}
+          baselines={baselines}
           selectedIds={selectedIds}
           onToggleSelect={onToggleSelect}
           onVideosChange={onVideosChange}
@@ -110,14 +138,39 @@ export default function CompetitorResearch({
       {tab === "pipeline" && (
         <RunPipelineTab clientId={clientId} onVideosChange={onVideosChange} />
       )}
-      {tab === "creators" && <CreatorsTab clientId={clientId} />}
+      {tab === "creators" && (
+        <CreatorsTab clientId={clientId} creators={creators} onCreatorsChange={setCreators} />
+      )}
       {tab === "configs" && <ConfigsTab clientId={clientId} />}
     </div>
   );
 }
 
-// ── Derived insights ─────────────────────────────────────────────────────────
-function Insights({ insights }: { insights: ReturnType<typeof deriveInsights> }) {
+// ── Most applicable videos ───────────────────────────────────────────────────
+//
+// Ranked by outlier score: how far each video beat its OWN creator's 30-day
+// average, which is a fairer signal than raw views (a 3k-view post from a small
+// account can be a bigger win than a 50k post from a large one). The spoken hook
+// and the why-it-fits line are a later session; for now this shows the outlier
+// alongside the heuristic hook the analysis text already yields.
+const APPLICABLE_COUNT = 6;
+
+function Insights({
+  insights,
+  videos,
+  baselines,
+}: {
+  insights: ReturnType<typeof deriveInsights>;
+  videos: Video[];
+  baselines: Map<string, Baseline>;
+}) {
+  const ranked = useMemo(() => {
+    const scored = sortByOutlier(videos, baselines)
+      .map((v) => ({ video: v, outlier: outlierFor(v, baselines) }))
+      .filter((r) => r.outlier.kind === "scored");
+    return scored.slice(0, APPLICABLE_COUNT);
+  }, [videos, baselines]);
+
   if (insights.videoCount === 0) {
     return (
       <div className="card border-dashed bg-cream/40 py-8 text-center text-sm text-ink-soft">
@@ -125,28 +178,50 @@ function Insights({ insights }: { insights: ReturnType<typeof deriveInsights> })
       </div>
     );
   }
+
+  // Nothing scoreable: say what to do about it rather than showing an empty box.
+  if (ranked.length === 0) {
+    return (
+      <div className="card">
+        <h3 className="flex items-center gap-2 font-display text-base text-ink">
+          <Flame size={16} strokeWidth={1.75} className="text-gold" /> Most applicable videos
+        </h3>
+        <p className="mt-3 text-sm text-ink-soft">
+          No baselines yet, so nothing can be ranked. Open the Creators tab and
+          hit <span className="font-medium text-ink">Refresh 30-day stats</span> —
+          that pulls each creator&rsquo;s average views, which is what a video is
+          scored against.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <h3 className="flex items-center gap-2 font-display text-base text-ink">
         <Flame size={16} strokeWidth={1.75} className="text-gold" /> Most applicable videos
       </h3>
-      {insights.hooks.length === 0 ? (
-        <p className="mt-3 text-xs text-ink-soft">No clear hooks detected yet.</p>
-      ) : (
-        <ul className="mt-3 space-y-2.5">
-          {insights.hooks.map((h, i) => (
-            <li key={i} className="border-l-2 border-gold pl-3 text-sm text-ink">
-              &ldquo;{h.text}&rdquo;
-              {h.creator && (
-                <span className="mt-0.5 block text-[11px] text-ink-soft">
-                  @{h.creator}
-                  {typeof h.views === "number" ? ` · ${fmt(h.views)} views` : ""}
-                </span>
-              )}
+      <p className="mt-1 text-xs text-ink-soft">
+        Ranked by how far each one beat that creator&rsquo;s own 30-day average.
+      </p>
+      <ul className="mt-3 space-y-2.5">
+        {ranked.map(({ video, outlier }) => {
+          const hook = insights.hooks.find((h) => h.creator === video.creator);
+          const multiple = outlier.kind === "scored" ? outlier.multiple : 0;
+          const stale = outlier.kind === "scored" && outlier.baseline.stale;
+          return (
+            <li key={video.id} className="border-l-2 border-gold pl-3 text-sm text-ink">
+              <span className="font-medium text-gold-deep">{formatMultiple(multiple)}</span>{" "}
+              {hook ? <>&ldquo;{hook.text}&rdquo;</> : <span className="text-ink-soft">No hook line detected in the analysis.</span>}
+              <span className="mt-0.5 block text-[11px] text-ink-soft">
+                @{video.creator ?? "unknown"}
+                {typeof video.views === "number" ? ` · ${fmt(video.views)} views` : ""}
+                {stale ? " · baseline approx" : ""}
+              </span>
             </li>
-          ))}
-        </ul>
-      )}
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -158,24 +233,34 @@ const COLLAPSED_VIDEOS = 3;
 function VideosTab({
   clientId,
   videos,
+  baselines,
   selectedIds,
   onToggleSelect,
   onVideosChange,
 }: {
   clientId: string;
   videos: Video[];
+  baselines: Map<string, Baseline>;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onVideosChange: (videos: Video[]) => void;
 }) {
   const [modal, setModal] = useState<Video | null>(null);
   const [expanded, setExpanded] = useState(false);
+  // Outlier-first by default: a 5x post is signal, a 1x post is just a post.
+  // Videos we cannot score keep their view order behind the scored ones.
+  const [sort, setSort] = useState<"outlier" | "views">("outlier");
   const [pending, start] = useTransition();
   const ownCount = videos.filter((v) => !isSharedRow(v.clientId)).length;
   // A full scrape lands ~60 videos. Showing them all buried the rest of the
   // step, so the grid opens on the first row and expands on demand.
-  const shown = expanded ? videos : videos.slice(0, COLLAPSED_VIDEOS);
-  const hidden = videos.length - shown.length;
+  const scored = useMemo(() => scoredCount(videos, baselines), [videos, baselines]);
+  const ordered = useMemo(
+    () => (sort === "outlier" ? sortByOutlier(videos, baselines) : videos),
+    [sort, videos, baselines]
+  );
+  const shown = expanded ? ordered : ordered.slice(0, COLLAPSED_VIDEOS);
+  const hidden = ordered.length - shown.length;
 
   function toggleStar(v: Video) {
     if (isSharedRow(v.clientId)) return; // shared — read-only
@@ -227,10 +312,27 @@ function VideosTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-soft">
           {videos.length} videos · {selectedIds.size} selected for ideation
+          {scored > 0 ? ` · ${scored} scored` : ""}
         </p>
+        <div className="flex items-center gap-2">
+          {scored > 0 && (
+            <div className="inline-flex rounded-lg border border-line bg-cream/50 p-0.5 text-xs">
+              {(["outlier", "views"] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setSort(k)}
+                  className={`rounded-md px-2 py-1 transition-colors ${
+                    sort === k ? "bg-paper font-medium text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {k === "outlier" ? "Top outliers" : "Most viewed"}
+                </button>
+              ))}
+            </div>
+          )}
         {ownCount > 0 && (
           <button
             onClick={clearMine}
@@ -240,6 +342,7 @@ function VideosTab({
             <Trash2 size={14} strokeWidth={1.75} /> Clear my videos
           </button>
         )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -247,6 +350,7 @@ function VideosTab({
           <VideoCard
             key={v.id}
             video={v}
+            outlier={outlierFor(v, baselines)}
             selected={selectedIds.has(v.id)}
             onToggleSelect={() => onToggleSelect(v.id)}
             onOpen={() => setModal(v)}
@@ -281,6 +385,7 @@ function VideosTab({
 
 function VideoCard({
   video,
+  outlier,
   selected,
   onToggleSelect,
   onOpen,
@@ -288,6 +393,7 @@ function VideoCard({
   onDelete,
 }: {
   video: Video;
+  outlier: Outlier;
   selected: boolean;
   onToggleSelect: () => void;
   onOpen: () => void;
@@ -320,6 +426,11 @@ function VideoCard({
             <Star size={12} fill="currentColor" strokeWidth={0} />
           </span>
         )}
+        {outlier.kind === "scored" && outlier.multiple >= OUTLIER_THRESHOLD && (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-semibold text-white shadow">
+            <TrendingUp size={10} strokeWidth={2.5} /> {formatMultiple(outlier.multiple)}
+          </span>
+        )}
       </button>
 
       <div className="space-y-1.5 p-2.5">
@@ -344,6 +455,8 @@ function VideoCard({
             <MessageSquare size={11} /> {fmt(video.comments)}
           </span>
         </div>
+
+        <OutlierLine outlier={outlier} />
 
         <div className="flex items-center justify-between gap-1 pt-0.5">
           <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink">
@@ -376,6 +489,43 @@ function VideoCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The score, or plainly why there isn't one. A missing baseline is never shown
+ * as a number: an unrefreshed creator is missing information, not a flop.
+ */
+function OutlierLine({ outlier }: { outlier: Outlier }) {
+  if (outlier.kind === "unknown-creator") {
+    return (
+      <p className="text-[10px] text-ink-soft/80" title="This video's account isn't in your creators list, so there's nothing to compare it against.">
+        No baseline · creator not tracked
+      </p>
+    );
+  }
+  if (outlier.kind === "no-baseline") {
+    return (
+      <p className="text-[10px] text-ink-soft/80" title="Hit 'Refresh 30-day stats' on the Creators tab to get this creator's average.">
+        No baseline yet · refresh this creator
+      </p>
+    );
+  }
+  const { multiple, baseline } = outlier;
+  const strong = multiple >= OUTLIER_THRESHOLD;
+  return (
+    <p className={`text-[10px] ${strong ? "font-medium text-gold-deep" : "text-ink-soft"}`}>
+      {formatMultiple(multiple)} their average
+      {baseline.stale ? (
+        <span
+          className="text-ink-soft/80"
+          title={`@${baseline.username}'s stats were last scraped ${baseline.ageDays} days ago, so this is approximate.`}
+        >
+          {" "}
+          · approx
+        </span>
+      ) : null}
+    </p>
   );
 }
 
@@ -440,24 +590,22 @@ function VideoModal({ video, onClose }: { video: Video; onClose: () => void }) {
 }
 
 // ── Creators tab (add / delete own · refresh own via SMAI SSE) ────────────────
-function CreatorsTab({ clientId }: { clientId: string }) {
-  const [creators, setCreators] = useState<Creator[] | null>(null);
+function CreatorsTab({
+  clientId,
+  creators,
+  onCreatorsChange,
+}: {
+  clientId: string;
+  creators: Creator[] | null;
+  onCreatorsChange: (update: (prev: Creator[] | null) => Creator[] | null) => void;
+}) {
+  const setCreators = onCreatorsChange;
   const [error, setError] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [category, setCategory] = useState("");
   const [adding, startAdd] = useTransition();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    listCompetitorCreators(clientId)
-      .then((c) => live && setCreators(c))
-      .catch((e) => live && setError(e instanceof Error ? e.message : "Failed to load creators."));
-    return () => {
-      live = false;
-    };
-  }, [clientId]);
 
   const ownedIds = (creators ?? []).filter((c) => !isSharedRow(c.clientId)).map((c) => c.id);
 
