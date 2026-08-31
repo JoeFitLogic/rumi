@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getActiveClient } from "@/lib/activeClient";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildClientContext } from "@/lib/scriptContext";
+import { stripPunctuationDashes } from "@/lib/prose";
 import { SCRIPT_GENERATOR } from "@/lib/prompts/script-generator";
 import { HOOK_GENERATOR, parseHooks } from "@/lib/prompts/hook-generator";
 import {
@@ -115,7 +116,9 @@ export async function generateHooks(input: HookInput): Promise<string[]> {
   ].join("\n");
 
   const raw = await callClaude(HOOK_GENERATOR, `${context}\n\n---\n\n${brief}`, HOOK_MAX_TOKENS);
-  const hooks = parseHooks(raw, HOOK_COUNT);
+  // The prompt bans em dashes and scans for them; it still lets some through
+  // (proven in the Interview verification), so the guarantee is enforced here.
+  const hooks = parseHooks(raw, HOOK_COUNT).map(stripPunctuationDashes);
   if (hooks.length === 0) {
     throw new Error("Rumi didn't return any usable hooks. Try again.");
   }
@@ -160,7 +163,7 @@ export async function generateScript(input: GenerateInput): Promise<ScriptRow> {
   const context = await buildClientContext(db, input.clientId);
   const userMessage = `${context}\n\n---\n\n${scriptBrief(input)}`;
 
-  const script = await callClaude(SCRIPT_GENERATOR, userMessage);
+  const script = stripPunctuationDashes(await callClaude(SCRIPT_GENERATOR, userMessage));
 
   // hook_type and audience_stage are legacy Cleo columns whose selectors were
   // removed from the form. Written null rather than a made-up value so new rows
@@ -224,7 +227,7 @@ export async function refineScript(input: RefineInput): Promise<ScriptRow> {
     `Refinement note: ${input.refinement.trim()}`,
   ].join("\n");
 
-  const revised = await callClaude(SCRIPT_GENERATOR, userMessage);
+  const revised = stripPunctuationDashes(await callClaude(SCRIPT_GENERATOR, userMessage));
 
   const { data, error } = await db
     .from("scripts")

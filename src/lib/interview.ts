@@ -1,3 +1,5 @@
+import { stripPunctuationDashes } from "@/lib/prose";
+
 // Interview mode — shared vocabulary and the pure helpers.
 //
 // Deliberately NOT in interviewActions.ts: that file is "use server", where
@@ -16,34 +18,6 @@ export const INTERVIEW_OPENER =
 
 export const SCRIPT_OPEN = "===SCRIPT===";
 export const SCRIPT_CLOSE = "===END SCRIPT===";
-
-/**
- * Em and en dashes used as punctuation, replaced with a comma.
- *
- * The prompt bans them and its final pass asks the model to scan for the
- * character itself, which is the strongest wording we have. It still is not
- * enough: a verification run produced a script with two of them in it, which is
- * the exact AI-tell the client sends scripts back for. A prompt is a request; a
- * regex is a guarantee, so the finished script gets both.
- *
- * Numeric ranges (45-60) keep their dash — those read as a range, not as an AI
- * tell, and turning them into a comma would change the meaning.
- */
-export function stripPunctuationDashes(text: string): string {
-  return text
-    .replace(/[^\S\n]*[\u2014\u2013][^\S\n]*/g, (match, offset: number, whole: string) => {
-      const before = whole.slice(0, offset).slice(-1);
-      const after = whole.slice(offset + match.length).slice(0, 1);
-      if (/\d/.test(before) && /\d/.test(after)) return match;
-      // A dash opening a line is a list marker, not punctuation mid-sentence.
-      if (before === "" || before === "\n") return match;
-      return ", ";
-    })
-    // Tidy what the substitution can leave behind.
-    .replace(/\s+,/g, ",")
-    .replace(/,\s*,/g, ",")
-    .replace(/,\s*([.!?])/g, "$1");
-}
 
 /**
  * Pull the finished script out of a reply.
