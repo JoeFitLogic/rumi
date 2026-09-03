@@ -31,6 +31,7 @@
 import { readFileSync } from "fs";
 import { randomBytes } from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { ANSWERS } from "./_onboarding-fixture.mjs";
 
 // ── env (.env.local is CRLF; trim strips stray \r). Also mirror into
 //    process.env so @trigger.dev/sdk picks up TRIGGER_SECRET_KEY in --live. ──
@@ -142,22 +143,19 @@ async function ensureAccount() {
   return user.id;
 }
 
-// Representative onboarding answers (a subset of columns — enough for a
-// meaningful --live prompt; the rest default to null).
-const ONBOARDING = {
-  describe_yourself_3_words: "Direct, practical, warm",
-  what_makes_you_different: "Systems-first coaching backed by real data, not vibes.",
-  one_sentence_description: "I help busy strength coaches turn content into booked calls.",
-  ideal_client: "Online strength coach, 25-40, 1-2k followers, stuck under 5k/mo.",
-  client_struggles: "Inconsistent posting, no clear offer, leads that never convert.",
-  top_three_goals: "Hit 10k/mo, build an email list, post 5x/week without burning out.",
-  platforms: "Instagram (primary), YouTube (growth)",
-  posting_frequency: "3-4x per week, wants to reach daily",
-  products_services: "1:1 coaching (£300/mo), 12-week transformation (£1200)",
-  biggest_challenge: "Turning followers into paying clients.",
-  timezone: "Europe/London",
-  anything_else: "[E2E FIXTURE] Disposable test record — safe to delete.",
-};
+// Onboarding answers for the disposable client. This is the SHARED rich
+// fixture from scripts/_onboarding-fixture.mjs — every column the Resonance
+// form asks for, answered the way a client who actually did the work would
+// answer it: verbatim 2am thoughts, a lowest point written as a scene, a real
+// banlist, named characters. --live is only worth the Anthropic spend if the
+// prompt gets that depth to work with; a thin subset produces a thin document
+// and proves nothing about the prompts.
+//
+// It carries no "[E2E FIXTURE]" marker text on purpose. Anything in these
+// columns lands in the model's user message, so a marker would show up in the
+// generated strategy. The disposable identity (e2e-strategy@rumi.test) is the
+// marker, and teardown is keyed on it.
+const ONBOARDING = ANSWERS;
 
 function fixtureSections() {
   const titles = [

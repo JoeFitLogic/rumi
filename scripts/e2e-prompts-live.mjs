@@ -14,6 +14,14 @@
 //   So this asserts on the OUTPUT, not the prompt text: did their actual words
 //   survive into the document, and did the banned ones stay out.
 //
+//   The Alex (Resonance) brief added a second class of claim: the document has
+//   to come in at 3,500-4,000 words, every section has to close on a bolded
+//   "Your move:" action, section 6 has to name the Trust Funnel and give the
+//   70/20/10 ratio, section 11 has to cover the four engagement moves and
+//   section 12 has to lead on followers per reel with the four milestones.
+//   Those are checked here too: WORD_BUDGET per part, and checks carrying
+//   `perSection` (must hold in EVERY listed section, not just somewhere).
+//
 // SAFETY
 //   Touches no database and creates no account. It builds the onboarding block
 //   in memory from the shared fixture, calls Anthropic directly with the real
@@ -37,6 +45,22 @@ const MAX_TOKENS = 16000;
 // on the first malformed response is stricter than the thing it is measuring.
 const MAX_ATTEMPTS = 3;
 const OUT = new URL("../.tmp-prompt-eval/", import.meta.url);
+
+// Per-part word budget from the brief: 3,500-4,000 for the whole document, so
+// 1,750-2,000 a part. Reported either way; only a breach of the upper bound is
+// treated as a failure, because overrunning is the failure mode being fixed.
+const WORD_BUDGET = { min: 1750, max: 2000 };
+
+// Alex's additions to the banned list, on top of the personal banlist the
+// client gave. These are the words that make a bespoke document read like a
+// template, so they are checked in both parts.
+const BANNED_HOUSE = [
+  /\bleverag(e|es|ed|ing)\b/i, /\butilis(e|es|ed|ing)\b/i, /\boptimis(e|es|ed|ing|ation)\b/i,
+  /\bcultivat(e|es|ed|ing)\b/i, /\bharness(es|ed|ing)?\b/i, /\bempower(s|ed|ing|ment)?\b/i,
+  /\bseamless(ly)?\b/i, /\brobust\b/i, /cutting-edge/i, /\binnovative\b/i,
+  /\bgroundbreaking\b/i, /transform your/i, /unlock your/i, /\bprospects?\b/i,
+  /as you move forward/i,
+];
 
 // ── load the real prompts + the real block builder ──
 function promptFrom(file, constName) {
@@ -97,7 +121,9 @@ const CHECKS = [
 
   { id: "banlist-shown", must: "present", section: 5,
     label: "S5 reproduces their banlist as an explicit do-not-use list",
-    patterns: [/never come out of your mouth/i, /don'?t use/i, /do not use/i, /avoid these/i, /cross (it |them )?out/i] },
+    // "Do-not-use list" is the heading the model actually reaches for, and the
+    // hyphens meant /do not use/ missed a section that was doing it right.
+    patterns: [/never come out of your mouth/i, /don'?t use/i, /do[- ]not[- ]use/i, /avoid these/i, /cross (it |them )?out/i] },
 
   { id: "swearing", must: "present", section: 5,
     label: "S5 addresses their stated swearing level (Moderate)",
@@ -110,6 +136,42 @@ const CHECKS = [
   { id: "fuckyou-a", must: "present", section: 1,
     label: "S1 names the fuck-you goal back to them (the gym, paid for outright)",
     patterns: [/\bgym\b/i, /outright/i, /no debt/i, /your name on it/i] },
+
+  // ── Alex brief ──
+  { id: "yourmove-a", must: "present", perSection: [1, 2, 3, 4, 5, 6],
+    label: 'every section closes on a bolded "Your move:"',
+    patterns: [/\*\*Your move:\*\*/] },
+
+  { id: "nofirstaction-a", must: "absent", section: null,
+    label: 'the old "Your first action here is" wording is gone',
+    patterns: [/first action here is/i] },
+
+  { id: "weakverbs-a", must: "absent", section: null,
+    label: 'no "consider/explore/reflect on" standing in for an action',
+    patterns: [/Your move:\s*(Consider|Explore|Reflect|Think about|Spend some time)/i] },
+
+  { id: "trustfunnel", must: "present", section: 6,
+    label: "S6 names the Trust Funnel and its three parts",
+    patterns: [/trust funnel/i] },
+
+  { id: "cnc", must: "present", section: 6,
+    label: "S6 defines Connect, Nurture and Convert",
+    patterns: [/connect/i] },
+
+  { id: "ratio", must: "present", section: 6,
+    label: "S6 gives the 70/20/10 starting ratio",
+    patterns: [/70\s*%?\s*[/ ]\s*20/i, /70%/] },
+
+  { id: "nofunnelstages", must: "absent", section: null,
+    label: "no top/middle/bottom-of-funnel language",
+    patterns: [/top of funnel/i, /middle of funnel/i, /bottom of funnel/i, /\bTOFU\b/, /\bMOFU\b/, /\bBOFU\b/] },
+
+  // S5 is excluded for the same reason as the personal banlist check: it is
+  // REQUIRED to quote bad language in order to ban it, and its weak-vs-strong
+  // rewrite pair is the clearest place in the document to show what not to say.
+  { id: "house-a", must: "absent", section: null, exclude: [5],
+    label: "the extended house banlist stays out of the prose (S5 excluded: it must quote bad language to ban it)",
+    patterns: BANNED_HOUSE },
 ];
 
 const B_CHECKS = [
@@ -136,6 +198,67 @@ const B_CHECKS = [
   { id: "emdash-b", must: "absent", section: null,
     label: "zero em dashes in Part B",
     patterns: [/—/] },
+
+  // ── Alex brief ──
+  { id: "yourmove-b", must: "present", perSection: [7, 8, 9, 10, 11, 12],
+    label: 'every section closes on a bolded "Your move:"',
+    patterns: [/\*\*Your move:\*\*/] },
+
+  { id: "nofirstaction-b", must: "absent", section: null,
+    label: 'the old "Your first action here is" wording is gone',
+    patterns: [/first action here is/i] },
+
+  { id: "weakverbs-b", must: "absent", section: null,
+    label: 'no "consider/explore/reflect on" standing in for an action',
+    patterns: [/Your move:\s*(Consider|Explore|Reflect|Think about|Spend some time)/i] },
+
+  { id: "engage-accelerator", must: "present", section: 11,
+    label: "S11 opens on engagement as a trust accelerator",
+    patterns: [/trust accelerator/i] },
+
+  { id: "engage-reply", must: "present", section: 11,
+    label: "S11 covers replying to a comment so it opens a thread into a DM",
+    patterns: [/opens? (a |the )?(thread|conversation)/i, /into a DM/i, /keeps? it open/i] },
+
+  { id: "engage-dm", must: "present", section: 11,
+    label: "S11 covers getting curious in DMs before pitching",
+    patterns: [/before you pitch/i, /curious/i, /questions? first/i] },
+
+  { id: "engage-stories", must: "present", section: 11,
+    label: "S11 covers Stories showing the human between posts",
+    patterns: [/between (the )?posts/i, /stor(y|ies)/i] },
+
+  { id: "engage-comments", must: "present", section: 11,
+    label: "S11 covers commenting on accounts the ideal client already follows",
+    patterns: [/accounts (your|their) ideal client/i, /already follows?/i] },
+
+  { id: "engage-nogeneric", must: "absent", section: 11,
+    label: "S11 drops the generic advice (reply quickly, engage with your community)",
+    patterns: [/reply quickly/i, /respond quickly/i, /engage with your community/i] },
+
+  { id: "northstar", must: "present", section: 12,
+    label: "S12 leads on followers per reel as the north star",
+    patterns: [/followers per reel/i] },
+
+  { id: "northstar-example", must: "present", section: 12,
+    label: "S12 uses the 200-views/50-follows against 10,000-views/30-follows example",
+    patterns: [/200 views/i, /10,?000 views/i] },
+
+  { id: "milestones", must: "present", section: 12,
+    label: "S12 gives the four milestones (1-30, 31-60, 61-90, 91-120)",
+    patterns: [/1 to 30|1-30|first 30/i] },
+
+  { id: "milestone-post", must: "present", section: 12,
+    label: "S12 makes days 1-30 about whether they posted, and nothing else",
+    patterns: [/did you post/i, /only metric/i] },
+
+  { id: "nofunnelstages-b", must: "absent", section: null,
+    label: "no top/middle/bottom-of-funnel language",
+    patterns: [/top of funnel/i, /middle of funnel/i, /bottom of funnel/i, /\bTOFU\b/, /\bMOFU\b/, /\bBOFU\b/] },
+
+  { id: "house-b", must: "absent", section: null,
+    label: "the extended house banlist stays out (leverage, harness, empower, prospect, ...)",
+    patterns: BANNED_HOUSE },
 ];
 
 function parseSections(raw) {
@@ -144,11 +267,37 @@ function parseSections(raw) {
   return JSON.parse(body).sections;
 }
 
+const words = (s) => s.split(/\s+/).filter(Boolean).length;
+
 function run(checks, sections, partName) {
-  const all = sections.map((s) => s.content).join("\n\n");
   let pass = 0, fail = 0;
   console.log(`\n── ${partName}: ${sections.length} sections ──`);
+
+  // Word budget first: over-length is the thing the brief set out to fix, so it
+  // reads as a check rather than a footnote.
+  const perSectionWords = sections.map((s) => `S${s.number}:${words(s.content)}`).join("  ");
+  const total = sections.reduce((n, s) => n + words(s.content), 0);
+  const budgetOk = total <= WORD_BUDGET.max;
+  console.log(`  ${budgetOk ? "PASS " : "FAIL "} word budget: ${total} words (target ${WORD_BUDGET.min}-${WORD_BUDGET.max})`);
+  console.log(`         ${perSectionWords}`);
+  if (total < WORD_BUDGET.min) console.log(`         note: under the lower bound, not failed`);
+  budgetOk ? pass++ : fail++;
+
   for (const c of checks) {
+    // perSection: the claim has to hold in EVERY listed section. "Somewhere in
+    // the document" is not the claim for a per-section rule like "Your move:".
+    if (c.perSection) {
+      const missing = c.perSection.filter((n) => {
+        const body = sections.find((s) => s.number === n)?.content ?? "";
+        const hits = c.patterns.filter((p) => p.test(body));
+        return c.must === "present" ? hits.length === 0 : hits.length > 0;
+      });
+      const ok = missing.length === 0;
+      console.log(`  ${ok ? "PASS " : "FAIL "} ${c.label}`);
+      if (!ok) console.log(`         sections at fault: ${missing.join(", ")}`);
+      ok ? pass++ : fail++;
+      continue;
+    }
     const hay = c.section
       ? (sections.find((s) => s.number === c.section)?.content ?? "")
       : sections
@@ -207,6 +356,7 @@ const msgs = await Promise.all(calls);
 console.log(`generated in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 let totals = { pass: 0, fail: 0 };
+let docWords = 0;
 const partNames = onlyB ? ["Part B (sections 7-12)"] : ["Part A (sections 1-6)", "Part B (sections 7-12)"];
 const checkSets = onlyB ? [B_CHECKS] : [CHECKS, B_CHECKS];
 
@@ -220,10 +370,17 @@ msgs.forEach(({ msg, raw }, i) => {
     sections.map((s) => `## ${s.number}. ${s.title}\n\n${s.content}`).join("\n\n---\n\n"));
   const r = run(checkSets[i], sections, partNames[i]);
   totals.pass += r.pass; totals.fail += r.fail;
+  docWords += sections.reduce((n, sec) => n + sec.content.split(/\s+/).filter(Boolean).length, 0);
   const u = msg.usage;
   console.log(`  tokens: ${u.input_tokens} in / ${u.output_tokens} out`);
 });
 
+// The brief's number is for the whole document, so say it plainly when both
+// parts ran. One part alone is only ever half the answer.
+if (!onlyA && !onlyB) {
+  const inRange = docWords >= 3500 && docWords <= 4000;
+  console.log(`\nWHOLE DOCUMENT: ${docWords} words (target 3,500-4,000) ${inRange ? "in range" : docWords > 4000 ? "OVER" : "under"}`);
+}
 console.log(`\n${totals.fail ? `${totals.fail} FAILED, ${totals.pass} passed` : `ALL ${totals.pass} CHECKS PASSED`}`);
 console.log(`output written to .tmp-prompt-eval/ for reading`);
 process.exit(totals.fail ? 1 : 0);
